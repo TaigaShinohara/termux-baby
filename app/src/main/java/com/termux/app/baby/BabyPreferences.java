@@ -18,6 +18,14 @@ public final class BabyPreferences {
     private static final String KEY_ONBOARDING_COMPLETED = "onboarding_completed";
     private static final String KEY_ONBOARDING_GOAL = "onboarding_goal";
     private static final String KEY_FIRST_ACTION_COMPLETED = "first_action_completed";
+    private static final String KEY_EXTRA_KEYS_PRESET = "extra_keys_preset";
+
+    /** Extra keys preset: clean 1-row × 6 keys with swipe-up popups (default). */
+    public static final String EXTRA_KEYS_PRESET_SIMPLE = "simple";
+    /** Extra keys preset: 2-row × 6 spacious keys with inverted-T arrows. */
+    public static final String EXTRA_KEYS_PRESET_BALANCED = "balanced";
+    /** Extra keys preset: original Termux 2-row × 7 keys (14 keys). */
+    public static final String EXTRA_KEYS_PRESET_CLASSIC = "classic";
 
     /** Goal choice 1: Try tools or Python. */
     public static final String GOAL_TOOLS_PYTHON = "tools_python";
@@ -81,6 +89,33 @@ public final class BabyPreferences {
     /** Marks that the user has completed their first Baby Mode action. */
     public static void setFirstActionCompleted(@NonNull Context context, boolean completed) {
         getPrefs(context).edit().putBoolean(KEY_FIRST_ACTION_COMPLETED, completed).apply();
+    }
+
+    /**
+     * Returns the selected Extra Keys layout preset ({@link #EXTRA_KEYS_PRESET_SIMPLE},
+     * {@link #EXTRA_KEYS_PRESET_BALANCED}, or {@link #EXTRA_KEYS_PRESET_CLASSIC}).
+     * Defaults to {@link #EXTRA_KEYS_PRESET_SIMPLE}.
+     */
+    @NonNull
+    public static String getExtraKeysPreset(@NonNull Context context) {
+        return normalizeExtraKeysPreset(getPrefs(context).getString(KEY_EXTRA_KEYS_PRESET, EXTRA_KEYS_PRESET_SIMPLE));
+    }
+
+    /** Saves the selected Extra Keys layout preset. Unknown values fall back to {@link #EXTRA_KEYS_PRESET_SIMPLE}. */
+    public static void setExtraKeysPreset(@NonNull Context context, @Nullable String preset) {
+        getPrefs(context).edit().putString(KEY_EXTRA_KEYS_PRESET, normalizeExtraKeysPreset(preset)).apply();
+    }
+
+    /** Normalizes any preset string to a valid preset constant, defaulting to {@link #EXTRA_KEYS_PRESET_SIMPLE}. */
+    @NonNull
+    public static String normalizeExtraKeysPreset(@Nullable String preset) {
+        if (EXTRA_KEYS_PRESET_BALANCED.equals(preset)) {
+            return EXTRA_KEYS_PRESET_BALANCED;
+        }
+        if (EXTRA_KEYS_PRESET_CLASSIC.equals(preset)) {
+            return EXTRA_KEYS_PRESET_CLASSIC;
+        }
+        return EXTRA_KEYS_PRESET_SIMPLE;
     }
 
     /**

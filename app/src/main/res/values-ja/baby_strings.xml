@@ -176,4 +176,15 @@
     <string name="baby_pref_default_mode_title">起動時にかんたんモードを開く</string>
     <string name="baby_pref_default_mode_summary_baby">ワンタップカード画面で開く（初心者におすすめ）</string>
     <string name="baby_pref_default_mode_summary_pro">通常のターミナル画面で直接開く</string>
+
+    <string name="baby_pref_extra_keys_title">ターミナル操作キー</string>
+    <string name="baby_pref_extra_keys_simple">シンプル（1段・おすすめ）</string>
+    <string name="baby_pref_extra_keys_balanced">バランス（2段）</string>
+    <string name="baby_pref_extra_keys_classic">従来（14キー）</string>
+
+    <string-array name="baby_extra_keys_preset_entries">
+        <item>@string/baby_pref_extra_keys_simple</item>
+        <item>@string/baby_pref_extra_keys_balanced</item>
+        <item>@string/baby_pref_extra_keys_classic</item>
+    </string-array>
 </resources>

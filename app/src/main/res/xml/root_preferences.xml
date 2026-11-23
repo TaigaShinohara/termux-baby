@@ -11,6 +11,14 @@
             app:summaryOff="@string/baby_pref_default_mode_summary_pro"
             app:persistent="false" />
 
+        <ListPreference
+            app:key="baby_extra_keys_preset"
+            app:title="@string/baby_pref_extra_keys_title"
+            app:entries="@array/baby_extra_keys_preset_entries"
+            app:entryValues="@array/baby_extra_keys_preset_values"
+            app:useSimpleSummaryProvider="true"
+            app:persistent="false" />
+
         <Preference
             app:key="baby_replay_onboarding"
             app:title="@string/baby_pref_replay_onboarding_title"

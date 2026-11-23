@@ -6,6 +6,7 @@ import android.os.Environment;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.SwitchPreferenceCompat;
@@ -85,6 +86,18 @@ public class SettingsActivity extends AppCompatActivity {
                 defaultModePref.setOnPreferenceChangeListener((preference, newValue) -> {
                     if (newValue instanceof Boolean) {
                         BabyPreferences.setBabyMode(context, (Boolean) newValue);
+                        return true;
+                    }
+                    return false;
+                });
+            }
+
+            ListPreference extraKeysPresetPref = findPreference("baby_extra_keys_preset");
+            if (extraKeysPresetPref != null) {
+                extraKeysPresetPref.setValue(BabyPreferences.getExtraKeysPreset(context));
+                extraKeysPresetPref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    if (newValue instanceof String) {
+                        BabyPreferences.setExtraKeysPreset(context, (String) newValue);
                         return true;
                     }
                     return false;

@@ -5,9 +5,11 @@ import android.view.Gravity;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.app.TermuxActivity;
+import com.termux.app.baby.BabyPreferences;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.logger.Logger;
@@ -16,6 +18,7 @@ import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
 import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
+import com.termux.terminal.TerminalSession;
 import com.termux.view.TerminalView;
 
 import org.json.JSONException;
@@ -29,6 +32,33 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     final TermuxTerminalSessionActivityClient mTermuxTerminalSessionActivityClient;
 
     private static final String LOG_TAG = "TermuxTerminalExtraKeys";
+
+    /** 1-tap interrupt key name handled directly by {@link #onTerminalExtraKeyButtonClick}. */
+    public static final String KEY_CTRL_C = "CTRL_C";
+
+    /** Simple preset: 1 row × 6 spacious keys with swipe-up popups. */
+    public static final String PRESET_SIMPLE_EXTRA_KEYS =
+        "[[{key: 'TAB', popup: 'ESC'}, {key: 'CTRL_C', display: '^C', popup: 'CTRL'}, " +
+        "{key: 'PASTE', display: 'Paste', popup: 'ALT'}, {key: '/', popup: '-'}, " +
+        "{key: 'UP', popup: 'LEFT'}, {key: 'DOWN', popup: 'RIGHT'}]]";
+
+    /** Balanced preset: 2 rows × 6 spacious keys with inverted-T arrows. */
+    public static final String PRESET_BALANCED_EXTRA_KEYS =
+        "[['ESC', 'TAB', {key: 'CTRL_C', display: '^C'}, {key: 'PASTE', display: 'Paste'}, 'UP', {key: '-', popup: '|'}], " +
+        "['CTRL', 'ALT', '/', 'LEFT', 'DOWN', 'RIGHT']]";
+
+    /** Returns the Extra Keys JSON specification for the given {@link BabyPreferences} preset. */
+    @NonNull
+    public static String getExtraKeysJsonForPreset(@Nullable String preset) {
+        String normalized = BabyPreferences.normalizeExtraKeysPreset(preset);
+        if (BabyPreferences.EXTRA_KEYS_PRESET_BALANCED.equals(normalized)) {
+            return PRESET_BALANCED_EXTRA_KEYS;
+        }
+        if (BabyPreferences.EXTRA_KEYS_PRESET_CLASSIC.equals(normalized)) {
+            return TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS;
+        }
+        return PRESET_SIMPLE_EXTRA_KEYS;
+    }
 
     public TermuxTerminalExtraKeys(TermuxActivity activity, @NonNull TerminalView terminalView,
                                    TermuxTerminalViewClient termuxTerminalViewClient,
@@ -45,15 +75,21 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
 
     /**
      * Set the terminal extra keys and style.
+     * Respects an explicit user-defined {@code extra-keys} entry in {@code ~/.termux/termux.properties};
+     * otherwise applies the Termux Baby preset selected in {@link BabyPreferences}.
      */
-    private void setExtraKeys() {
+    public void setExtraKeys() {
         mExtraKeysInfo = null;
 
         try {
-            // The mMap stores the extra key and style string values while loading properties
-            // Check {@link #getExtraKeysInternalPropertyValueFromValue(String)} and
-            // {@link #getExtraKeysStyleInternalPropertyValueFromValue(String)}
-            String extrakeys = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, true);
+            // Respect explicit user-defined extra-keys in termux.properties; otherwise use Termux Baby preset.
+            String rawUserExtraKeys = mActivity.getProperties().getPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, null, true);
+            String extrakeys;
+            if (rawUserExtraKeys != null && !rawUserExtraKeys.trim().isEmpty()) {
+                extrakeys = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, true);
+            } else {
+                extrakeys = getExtraKeysJsonForPreset(BabyPreferences.getExtraKeysPreset(mActivity));
+            }
             String extraKeysStyle = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, true);
 
             ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap = ExtraKeysInfo.getCharDisplayMapForStyle(extraKeysStyle);
@@ -68,7 +104,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             Logger.logStackTraceWithMessage(LOG_TAG, "Could not load and set the \"" + TermuxPropertyConstants.KEY_EXTRA_KEYS + "\" property from the properties file: ", e);
 
             try {
-                mExtraKeysInfo = new ExtraKeysInfo(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+                mExtraKeysInfo = new ExtraKeysInfo(PRESET_SIMPLE_EXTRA_KEYS, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
             } catch (JSONException e2) {
                 Logger.showToast(mActivity, "Can't create default extra keys",true);
                 Logger.logStackTraceWithMessage(LOG_TAG, "Could create default extra keys: ", e);
@@ -96,7 +132,15 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         } else if ("PASTE".equals(key)) {
             if(mTermuxTerminalSessionActivityClient != null)
                 mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(null);
-        }  else if ("SCROLL".equals(key)) {
+        } else if (KEY_CTRL_C.equals(key)) {
+            TerminalView terminalView = mActivity != null ? mActivity.getTerminalView() : null;
+            if (terminalView != null) {
+                TerminalSession session = terminalView.getCurrentSession();
+                if (session != null && session.isRunning()) {
+                    session.write("\u0003");
+                }
+            }
+        } else if ("SCROLL".equals(key)) {
             TerminalView terminalView = mTermuxTerminalViewClient.getActivity().getTerminalView();
             if (terminalView != null && terminalView.mEmulator != null)
                 terminalView.mEmulator.toggleAutoScrollDisabled();

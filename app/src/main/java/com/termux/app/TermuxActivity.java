@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.util.TypedValue;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Gravity;
@@ -145,6 +146,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * The client for the {@link #mExtraKeysView}.
      */
     TermuxTerminalExtraKeys mTermuxTerminalExtraKeys;
+
+    /** Last Extra Keys preset applied to {@link #mTermuxTerminalExtraKeys}. */
+    private String mAppliedExtraKeysPreset;
 
     /**
      * The termux sessions list controller.
@@ -363,6 +367,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
 
+        // Reload Extra Keys immediately if the user changed the preset in Settings
+        String currentExtraKeysPreset = BabyPreferences.getExtraKeysPreset(this);
+        if (mAppliedExtraKeysPreset != null && !mAppliedExtraKeysPreset.equals(currentExtraKeysPreset)) {
+            mAppliedExtraKeysPreset = currentExtraKeysPreset;
+            reloadExtraKeysView();
+        }
+
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
 
@@ -571,6 +582,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
     private void setTerminalToolbarView(Bundle savedInstanceState) {
+        mAppliedExtraKeysPreset = BabyPreferences.getExtraKeysPreset(this);
         mTermuxTerminalExtraKeys = new TermuxTerminalExtraKeys(this, mTerminalView,
             mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient);
 
@@ -590,14 +602,40 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         terminalToolbarViewPager.addOnPageChangeListener(new TerminalToolbarViewPager.OnPageChangeListener(this, terminalToolbarViewPager));
     }
 
+    private void reloadExtraKeysView() {
+        if (mTermuxTerminalExtraKeys != null) {
+            mTermuxTerminalExtraKeys.setExtraKeys();
+            if (mExtraKeysView != null) {
+                mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
+                mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
+            }
+        }
+        setTerminalToolbarHeight();
+    }
+
     private void setTerminalToolbarHeight() {
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (terminalToolbarViewPager == null) return;
 
+        int rowCount = (mTermuxTerminalExtraKeys == null || mTermuxTerminalExtraKeys.getExtraKeysInfo() == null)
+            ? 0
+            : mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length;
+
+        float baseHeightPx;
+        if (rowCount <= 0) {
+            baseHeightPx = 0f;
+        } else if (rowCount == 1) {
+            // Comfortable 1-row touch strip (~48dp from layout_height)
+            baseHeightPx = mTerminalToolbarDefaultHeight;
+        } else {
+            // Spacious multi-row layout (~43dp per row, ~86dp for 2 rows)
+            float multiRowHeightPx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 43f, getResources().getDisplayMetrics());
+            baseHeightPx = multiRowHeightPx * rowCount;
+        }
+
         ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
-        layoutParams.height = Math.round(mTerminalToolbarDefaultHeight *
-            (mTermuxTerminalExtraKeys.getExtraKeysInfo() == null ? 0 : mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length) *
-            mProperties.getTerminalToolbarHeightScaleFactor());
+        layoutParams.height = Math.round(baseHeightPx * mProperties.getTerminalToolbarHeightScaleFactor());
         terminalToolbarViewPager.setLayoutParams(layoutParams);
     }
 
@@ -1271,6 +1309,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void reloadActivityStyling(boolean recreateActivity) {
         if (mProperties != null) {
             reloadProperties();
+
+            if (mTermuxTerminalExtraKeys != null) {
+                mAppliedExtraKeysPreset = BabyPreferences.getExtraKeysPreset(this);
+                mTermuxTerminalExtraKeys.setExtraKeys();
+            }
 
             if (mExtraKeysView != null) {
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());

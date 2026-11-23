@@ -176,4 +176,21 @@
     <string name="baby_pref_default_mode_title">Start in Easy Mode</string>
     <string name="baby_pref_default_mode_summary_baby">Open with one-tap cards (recommended for beginners)</string>
     <string name="baby_pref_default_mode_summary_pro">Open directly in the classic terminal</string>
+
+    <string name="baby_pref_extra_keys_title">Terminal Extra Keys</string>
+    <string name="baby_pref_extra_keys_simple">Simple (1 row, recommended)</string>
+    <string name="baby_pref_extra_keys_balanced">Balanced (2 rows)</string>
+    <string name="baby_pref_extra_keys_classic">Classic (14 keys)</string>
+
+    <string-array name="baby_extra_keys_preset_entries">
+        <item>@string/baby_pref_extra_keys_simple</item>
+        <item>@string/baby_pref_extra_keys_balanced</item>
+        <item>@string/baby_pref_extra_keys_classic</item>
+    </string-array>
+
+    <string-array name="baby_extra_keys_preset_values" translatable="false">
+        <item>simple</item>
+        <item>balanced</item>
+        <item>classic</item>
+    </string-array>
 </resources>

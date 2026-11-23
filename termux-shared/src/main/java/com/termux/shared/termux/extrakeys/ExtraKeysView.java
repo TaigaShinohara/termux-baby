@@ -2,11 +2,19 @@ package com.termux.shared.termux.extrakeys;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.text.TextPaint;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -119,13 +127,26 @@ public final class ExtraKeysView extends GridLayout {
     public static final int ATTR_BUTTON_ACTIVE_BACKGROUND_COLOR = R.attr.extraKeysButtonActiveBackgroundColor;
 
     /** Defines the default fallback value for {@link #mButtonTextColor} if {@link #ATTR_BUTTON_TEXT_COLOR} is undefined. */
-    public static final int DEFAULT_BUTTON_TEXT_COLOR = 0xFFFFFFFF;
+    public static final int DEFAULT_BUTTON_TEXT_COLOR = 0xFFF1F5F9;
     /** Defines the default fallback value for {@link #mButtonActiveTextColor} if {@link #ATTR_BUTTON_ACTIVE_TEXT_COLOR} is undefined. */
-    public static final int DEFAULT_BUTTON_ACTIVE_TEXT_COLOR = 0xFF80DEEA;
+    public static final int DEFAULT_BUTTON_ACTIVE_TEXT_COLOR = 0xFF0D1B18;
     /** Defines the default fallback value for {@link #mButtonBackgroundColor} if {@link #ATTR_BUTTON_BACKGROUND_COLOR} is undefined. */
-    public static final int DEFAULT_BUTTON_BACKGROUND_COLOR = 0x00000000;
+    public static final int DEFAULT_BUTTON_BACKGROUND_COLOR = 0xFF232834;
     /** Defines the default fallback value for {@link #mButtonActiveBackgroundColor} if {@link #ATTR_BUTTON_ACTIVE_BACKGROUND_COLOR} is undefined. */
-    public static final int DEFAULT_BUTTON_ACTIVE_BACKGROUND_COLOR = 0xFF7F7F7F;
+    public static final int DEFAULT_BUTTON_ACTIVE_BACKGROUND_COLOR = 0xFF52C7AC;
+
+    /** Warm Slate toolbar surface color behind rounded key cards. */
+    public static final int DEFAULT_TOOLBAR_BACKGROUND_COLOR = 0xFF161920;
+    /** Subtle key card border color in resting state. */
+    public static final int DEFAULT_BUTTON_BORDER_COLOR = 0xFF2F3646;
+    /** Key card fill color while pressed. */
+    public static final int DEFAULT_BUTTON_PRESSED_BACKGROUND_COLOR = 0xFF313A4D;
+    /** Subtle key card border color while pressed. */
+    public static final int DEFAULT_BUTTON_PRESSED_BORDER_COLOR = 0xFF43506A;
+    /** Muted slate hint color for top-right swipe-up popup labels (>= 4.5:1 on #232834). */
+    public static final int DEFAULT_POPUP_HINT_TEXT_COLOR = 0xFF94A3B8;
+    /** Dark teal hint color for top-right swipe-up popup labels when key is active. */
+    public static final int DEFAULT_POPUP_HINT_ACTIVE_TEXT_COLOR = 0xFF1E4D42;
 
 
 
@@ -221,8 +242,132 @@ public final class ExtraKeysView extends GridLayout {
             ThemeUtils.getSystemAttrColor(context, ATTR_BUTTON_BACKGROUND_COLOR, DEFAULT_BUTTON_BACKGROUND_COLOR),
             ThemeUtils.getSystemAttrColor(context, ATTR_BUTTON_ACTIVE_BACKGROUND_COLOR, DEFAULT_BUTTON_ACTIVE_BACKGROUND_COLOR));
 
+        setBackgroundColor(DEFAULT_TOOLBAR_BACKGROUND_COLOR);
+        int padH = dpToPx(4f);
+        int padV = dpToPx(3f);
+        setPadding(padH, padV, padH, padV);
+
         setLongPressTimeout(ViewConfiguration.getLongPressTimeout());
         setLongPressRepeatDelay(DEFAULT_LONG_PRESS_REPEAT_DELAY);
+    }
+
+    private int dpToPx(float dp) {
+        return Math.round(TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, dp, getResources().getDisplayMetrics()));
+    }
+
+    private float spToPx(float sp) {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP, sp, getResources().getDisplayMetrics());
+    }
+
+    /**
+     * Lightweight {@link MaterialButton} subclass that draws a subtle top-right popup hint label
+     * when a key has a swipe-up popup action, without adding extra ViewGroup hierarchy.
+     */
+    private static final class ExtraKeyMaterialButton extends MaterialButton {
+        @Nullable
+        private String mPopupHint;
+        private final TextPaint mHintPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final float mHintInsetEndPx;
+        private final float mHintInsetTopPx;
+
+        ExtraKeyMaterialButton(Context context) {
+            super(context, null, android.R.attr.buttonBarButtonStyle);
+            float density = context.getResources().getDisplayMetrics().density;
+            mHintInsetEndPx = 5f * density;
+            mHintInsetTopPx = 2.5f * density;
+            mHintPaint.setTextAlign(Paint.Align.RIGHT);
+            mHintPaint.setTextSize(TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP, 8.5f, context.getResources().getDisplayMetrics()));
+            mHintPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            mHintPaint.setColor(DEFAULT_POPUP_HINT_TEXT_COLOR);
+        }
+
+        void setPopupHint(@Nullable String hint) {
+            mPopupHint = hint;
+            invalidate();
+        }
+
+        void setPopupHintColor(int color) {
+            if (mHintPaint.getColor() != color) {
+                mHintPaint.setColor(color);
+                invalidate();
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            if (mPopupHint != null && !mPopupHint.isEmpty() && getWidth() > 0 && getHeight() > 0) {
+                Paint.FontMetrics fm = mHintPaint.getFontMetrics();
+                float baselineY = getScrollY() + mHintInsetTopPx - fm.top;
+                float rightX = getScrollX() + getWidth() - mHintInsetEndPx;
+                canvas.drawText(mPopupHint, rightX, baselineY, mHintPaint);
+            }
+        }
+    }
+
+    private boolean isSpecialButtonActive(@NonNull ExtraKeyButton buttonInfo) {
+        if (isSpecialButton(buttonInfo)) {
+            SpecialButtonState state = mSpecialButtons.get(SpecialButton.valueOf(buttonInfo.getKey()));
+            return state != null && state.isActive;
+        }
+        ExtraKeyButton popup = buttonInfo.getPopup();
+        if (popup != null && isSpecialButton(popup)) {
+            SpecialButtonState popupState = mSpecialButtons.get(SpecialButton.valueOf(popup.getKey()));
+            return popupState != null && popupState.isActive;
+        }
+        return false;
+    }
+
+    private void configureKeyCardButton(@NonNull MaterialButton button, boolean hasPopupHint, boolean compactRow) {
+        button.setInsetTop(0);
+        button.setInsetBottom(0);
+        button.setMinWidth(0);
+        button.setMinHeight(0);
+        button.setMinimumWidth(0);
+        button.setMinimumHeight(0);
+        button.setMaxLines(1);
+        button.setIncludeFontPadding(false);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, compactRow ? 12.5f : 13.5f);
+        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setCornerRadius(dpToPx(10f));
+        button.setStrokeWidth(dpToPx(1f));
+        button.setRippleColor(ColorStateList.valueOf(Color.TRANSPARENT));
+        button.setPadding(dpToPx(2f), hasPopupHint ? dpToPx(5f) : 0, dpToPx(2f), 0);
+    }
+
+    /** Updates a key card's fill, border, text, and popup hint colors for its pressed/active state. */
+    void updateButtonVisualState(@NonNull MaterialButton button, boolean isPressed, boolean isActive) {
+        int bgColor;
+        int borderColor;
+        int textColor;
+        int hintColor;
+
+        if (isActive) {
+            bgColor = mButtonActiveBackgroundColor;
+            borderColor = mButtonActiveBackgroundColor;
+            textColor = mButtonActiveTextColor;
+            hintColor = DEFAULT_POPUP_HINT_ACTIVE_TEXT_COLOR;
+        } else if (isPressed) {
+            bgColor = DEFAULT_BUTTON_PRESSED_BACKGROUND_COLOR;
+            borderColor = DEFAULT_BUTTON_PRESSED_BORDER_COLOR;
+            textColor = mButtonTextColor;
+            hintColor = DEFAULT_POPUP_HINT_TEXT_COLOR;
+        } else {
+            bgColor = mButtonBackgroundColor;
+            borderColor = DEFAULT_BUTTON_BORDER_COLOR;
+            textColor = mButtonTextColor;
+            hintColor = DEFAULT_POPUP_HINT_TEXT_COLOR;
+        }
+
+        button.setBackgroundTintList(ColorStateList.valueOf(bgColor));
+        button.setStrokeColor(ColorStateList.valueOf(borderColor));
+        button.setTextColor(textColor);
+        if (button instanceof ExtraKeyMaterialButton) {
+            ((ExtraKeyMaterialButton) button).setPopupHintColor(hintColor);
+        }
     }
 
 
@@ -397,6 +542,10 @@ public final class ExtraKeysView extends GridLayout {
         setRowCount(buttons.length);
         setColumnCount(maximumLength(buttons));
 
+        final boolean compactRow = buttons.length >= 2;
+        final int marginH = dpToPx(3f);
+        final int marginV = dpToPx(compactRow ? 2.5f : 3f);
+
         for (int row = 0; row < buttons.length; row++) {
             for (int col = 0; col < buttons[row].length; col++) {
                 final ExtraKeyButton buttonInfo = buttons[row][col];
@@ -406,13 +555,26 @@ public final class ExtraKeysView extends GridLayout {
                     button = createSpecialButton(buttonInfo.getKey(), true);
                     if (button == null) return;
                 } else {
-                    button = new MaterialButton(getContext(), null, android.R.attr.buttonBarButtonStyle);
+                    button = new ExtraKeyMaterialButton(getContext());
+                    if (buttonInfo.getPopup() != null && isSpecialButton(buttonInfo.getPopup())) {
+                        SpecialButtonState popupState = mSpecialButtons.get(SpecialButton.valueOf(buttonInfo.getPopup().getKey()));
+                        if (popupState != null) {
+                            popupState.setIsCreated(true);
+                            popupState.buttons.add(button);
+                        }
+                    }
+                }
+
+                String popupHint = buttonInfo.getPopup() != null ? buttonInfo.getPopup().getDisplay() : null;
+                boolean hasPopupHint = popupHint != null && !popupHint.isEmpty();
+                if (button instanceof ExtraKeyMaterialButton) {
+                    ((ExtraKeyMaterialButton) button).setPopupHint(popupHint);
                 }
 
                 button.setText(buttonInfo.getDisplay());
-                button.setTextColor(mButtonTextColor);
                 button.setAllCaps(mButtonTextAllCaps);
-                button.setPadding(0, 0, 0, 0);
+                configureKeyCardButton(button, hasPopupHint, compactRow);
+                updateButtonVisualState(button, false, isSpecialButtonActive(buttonInfo));
 
                 button.setOnClickListener(view -> {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
@@ -422,7 +584,7 @@ public final class ExtraKeysView extends GridLayout {
                 button.setOnTouchListener((view, event) -> {
                     switch (event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
-                            view.setBackgroundColor(mButtonActiveBackgroundColor);
+                            updateButtonVisualState(button, true, isSpecialButtonActive(buttonInfo));
                             // Start long press scheduled executors which will be stopped in next MotionEvent
                             startScheduledExecutors(view, buttonInfo, button);
                             return true;
@@ -432,23 +594,23 @@ public final class ExtraKeysView extends GridLayout {
                                 // Show popup on swipe up
                                 if (mPopupWindow == null && event.getY() < 0) {
                                     stopScheduledExecutors();
-                                    view.setBackgroundColor(mButtonBackgroundColor);
+                                    updateButtonVisualState(button, false, isSpecialButtonActive(buttonInfo));
                                     showPopup(view, buttonInfo.getPopup());
                                 }
                                 if (mPopupWindow != null && event.getY() > 0) {
-                                    view.setBackgroundColor(mButtonActiveBackgroundColor);
+                                    updateButtonVisualState(button, true, isSpecialButtonActive(buttonInfo));
                                     dismissPopup();
                                 }
                             }
                             return true;
 
                         case MotionEvent.ACTION_CANCEL:
-                            view.setBackgroundColor(mButtonBackgroundColor);
+                            updateButtonVisualState(button, false, isSpecialButtonActive(buttonInfo));
                             stopScheduledExecutors();
                             return true;
 
                         case MotionEvent.ACTION_UP:
-                            view.setBackgroundColor(mButtonBackgroundColor);
+                            updateButtonVisualState(button, false, isSpecialButtonActive(buttonInfo));
                             stopScheduledExecutors();
                             // If ACTION_UP up was not from a repetitive key or was with a key with a popup button
                             if (mLongPressCount == 0 || mPopupWindow != null) {
@@ -456,6 +618,7 @@ public final class ExtraKeysView extends GridLayout {
                                 if (mPopupWindow != null) {
                                     dismissPopup();
                                     if (buttonInfo.getPopup() != null) {
+                                        performExtraKeyButtonHapticFeedback(view, buttonInfo.getPopup(), button);
                                         onAnyExtraKeyButtonClick(view, buttonInfo.getPopup(), button);
                                     }
                                 } else {
@@ -476,7 +639,7 @@ public final class ExtraKeysView extends GridLayout {
                 } else {
                     param.height = 0;
                 }
-                param.setMargins(0, 0, 0, 0);
+                param.setMargins(marginH, marginV, marginH, marginV);
                 param.columnSpec = GridLayout.spec(col, GridLayout.FILL, 1.f);
                 param.rowSpec = GridLayout.spec(row, GridLayout.FILL, 1.f);
                 button.setLayoutParams(param);
@@ -590,24 +753,28 @@ public final class ExtraKeysView extends GridLayout {
         int width = view.getMeasuredWidth();
         int height = view.getMeasuredHeight();
         MaterialButton button;
+        boolean isActiveSpecial = false;
         if (isSpecialButton(extraButton)) {
             button = createSpecialButton(extraButton.getKey(), false);
             if (button == null) return;
+            isActiveSpecial = isSpecialButtonActive(extraButton);
         } else {
-            button = new MaterialButton(getContext(), null, android.R.attr.buttonBarButtonStyle);
-            button.setTextColor(mButtonTextColor);
+            button = new ExtraKeyMaterialButton(getContext());
         }
         button.setText(extraButton.getDisplay());
         button.setAllCaps(mButtonTextAllCaps);
-        button.setPadding(0, 0, 0, 0);
-        button.setMinHeight(0);
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
-        button.setMinimumHeight(0);
+        configureKeyCardButton(button, false, false);
         button.setWidth(width);
         button.setHeight(height);
-        button.setBackgroundColor(mButtonActiveBackgroundColor);
+        if (isActiveSpecial) {
+            updateButtonVisualState(button, false, true);
+        } else {
+            button.setBackgroundTintList(ColorStateList.valueOf(DEFAULT_BUTTON_PRESSED_BACKGROUND_COLOR));
+            button.setStrokeColor(ColorStateList.valueOf(mButtonActiveBackgroundColor));
+            button.setTextColor(mButtonTextColor);
+        }
         mPopupWindow = new PopupWindow(this);
+        mPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         mPopupWindow.setWidth(LayoutParams.WRAP_CONTENT);
         mPopupWindow.setHeight(LayoutParams.WRAP_CONTENT);
         mPopupWindow.setContentView(button);
@@ -658,8 +825,8 @@ public final class ExtraKeysView extends GridLayout {
         SpecialButtonState state = mSpecialButtons.get(SpecialButton.valueOf(buttonKey));
         if (state == null) return null;
         state.setIsCreated(true);
-        MaterialButton button = new MaterialButton(getContext(), null, android.R.attr.buttonBarButtonStyle);
-        button.setTextColor(state.isActive ? mButtonActiveTextColor : mButtonTextColor);
+        MaterialButton button = new ExtraKeyMaterialButton(getContext());
+        updateButtonVisualState(button, false, state.isActive);
         if (needUpdate) {
             state.buttons.add(button);
         }

@@ -32,4 +32,11 @@
     <!-- Launcher Icon Brand Colors -->
     <color name="baby_launcher_bg_start">#1F7D68</color>
     <color name="baby_launcher_bg_end">#2B9A81</color>
+
+    <!-- Pro Terminal Extra Keys Palette (Warm Slate + Calm Mint Teal, >= 4.5:1 contrast) -->
+    <color name="baby_extra_keys_toolbar_bg">#161920</color>
+    <color name="baby_extra_keys_key_bg">#232834</color>
+    <color name="baby_extra_keys_key_text">#F1F5F9</color>
+    <color name="baby_extra_keys_key_active_bg">#52C7AC</color>
+    <color name="baby_extra_keys_key_active_text">#0D1B18</color>
 </resources>
