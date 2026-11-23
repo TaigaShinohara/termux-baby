@@ -1,3 +1,10 @@
+# Termux Baby
+
+> **Note:** This is an unofficial fork of [termux/termux-app](https://github.com/termux/termux-app) (licensed under GPLv3).
+> Please **do NOT** report issues, ask questions, or request support for **Termux Baby** on the upstream Termux repository, Discord, or other official Termux channels.
+
+---
+
 # Termux application
 
 [![Build status](https://github.com/termux/termux-app/workflows/Build/badge.svg)](https://github.com/termux/termux-app/actions)
