@@ -566,6 +566,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     public void setSoftKeyboardState(boolean isStartup, boolean isReloadTermuxProperties) {
+        if (mActivity.isBabyModeActive()) {
+            Logger.logVerbose(LOG_TAG, "Suppressing soft keyboard while Baby Mode is active");
+            KeyboardUtils.hideSoftKeyboard(mActivity, mActivity.getTerminalView());
+            mActivity.getTerminalView().clearFocus();
+            return;
+        }
+
         boolean noShowKeyboard = false;
 
         // Requesting terminal view focus is necessary regardless of if soft keyboard is to be
@@ -648,7 +655,9 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     private Runnable getShowSoftKeyboardRunnable() {
         if (mShowSoftKeyboardRunnable == null) {
             mShowSoftKeyboardRunnable = () -> {
-                KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
+                if (!mActivity.isBabyModeActive()) {
+                    KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
+                }
             };
         }
         return mShowSoftKeyboardRunnable;

@@ -9,7 +9,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.view.ContextMenu;
@@ -19,15 +22,20 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.termux.R;
 import com.termux.app.api.file.FileReceiverActivity;
+import com.termux.app.baby.BabyModeController;
+import com.termux.app.baby.BabyPreferences;
+import com.termux.app.baby.onboarding.BabyOnboardingActivity;
 import com.termux.app.terminal.TermuxActivityRootView;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
@@ -53,6 +61,7 @@ import com.termux.shared.termux.TermuxUtils;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.theme.TermuxThemeUtils;
 import com.termux.shared.theme.NightMode;
+import com.termux.shared.view.KeyboardUtils;
 import com.termux.shared.view.ViewUtils;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
@@ -62,9 +71,13 @@ import com.termux.view.TerminalViewClient;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 
 /**
@@ -175,6 +188,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float mTerminalToolbarDefaultHeight;
 
+    /** Termux Baby mode controller and chrome views. */
+    private BabyModeController mBabyModeController;
+    private View mBabyTopBar;
+    private View mBabyProReturnPill;
+    private TextView mBabyModeEasyTab;
+    private TextView mBabyModeProTab;
+    private boolean mIsBabyModeActive = false;
+    private boolean mIsOnboardingInProgress = false;
+    private boolean mIsBootstrapSetupRunning = false;
+    @Nullable
+    private String mPendingProCommand;
+
+    private static final String BABY_PREFS_NAME = "termux_baby_prefs";
+    private static final String KEY_HUSHLOGIN_INITIALIZED = "hushlogin_initialized";
+
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
@@ -253,6 +281,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         registerForContextMenu(mTerminalView);
 
+        setBabyModeViews();
+
+        ensureHushLoginOnce();
+
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);
 
         try {
@@ -277,6 +309,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Send the {@link TermuxConstants#BROADCAST_TERMUX_OPENED} broadcast to notify apps that Termux
         // app has been opened.
         TermuxUtils.sendTermuxOpenedBroadcast(this);
+
+        // Launch gentle first-run onboarding if not yet completed
+        if (!mIsActivityRecreated && BabyOnboardingActivity.shouldShowOnboarding(this)) {
+            mIsOnboardingInProgress = true;
+            startActivityForResult(
+                BabyOnboardingActivity.createIntent(this),
+                BabyOnboardingActivity.REQUEST_CODE_ONBOARDING
+            );
+        }
     }
 
     @Override
@@ -309,11 +350,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mIsInvalidState) return;
 
+        mIsOnboardingInProgress = false;
+
+        // Sync Baby/Pro mode state before terminal view client adjusts soft keyboard
+        if (mBabyModeController != null) {
+            boolean shouldBeBabyMode = BabyPreferences.isBabyMode(this);
+            if (shouldBeBabyMode != mIsBabyModeActive) {
+                applyModeUi(shouldBeBabyMode, false);
+            } else if (mIsBabyModeActive) {
+                mBabyModeController.refreshState();
+                updateBabySystemBarsAppearance(true);
+            }
+        }
+
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
 
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
+
+        // If service connected while onboarding was on top, finish bootstrap/session setup now
+        if (mIsVisible && mTermuxService != null && mTermuxService.isTermuxSessionsEmpty()) {
+            ensureBootstrapAndInitialSession(null);
+        }
 
         // Check if a crash happened on last run of the app or if a plugin crashed and show a
         // notification with the crash details if it did
@@ -349,6 +408,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         super.onDestroy();
 
         Logger.logDebug(LOG_TAG, "onDestroy");
+
+        if (mBabyModeController != null) {
+            mBabyModeController.destroy();
+            mBabyModeController = null;
+        }
 
         if (mIsInvalidState) return;
 
@@ -396,23 +460,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
-                TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
-                    if (mTermuxService == null) return; // Activity might have been destroyed.
-                    try {
-                        boolean launchFailsafe = false;
-                        if (intent != null && intent.getExtras() != null) {
-                            launchFailsafe = intent.getExtras().getBoolean(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
-                        }
-                        mTermuxTerminalSessionActivityClient.addNewSession(launchFailsafe, null);
-                    } catch (WindowManager.BadTokenException e) {
-                        // Activity finished - ignore.
-                    }
-                });
-            } else {
+                ensureBootstrapAndInitialSession(intent);
+            } else if (!mIsOnboardingInProgress) {
                 // The service connected while not in foreground - just bail out.
                 finishActivityIfNotFinishing();
             }
         } else {
+            ensureHushLoginOnce();
+            if (mBabyModeController != null) {
+                mBabyModeController.setEnvironmentReady(true);
+            }
+
             // If termux was started from launcher "New session" shortcut and activity is recreated,
             // then the original intent will be re-delivered, resulting in a new session being re-added
             // each time.
@@ -423,6 +481,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             } else {
                 mTermuxTerminalSessionActivityClient.setCurrentSession(mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast());
             }
+            flushPendingProCommand();
         }
 
         // Update the {@link TerminalSession} and {@link TerminalEmulator} clients.
@@ -463,6 +522,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void setMargins() {
         RelativeLayout relativeLayout = findViewById(R.id.activity_termux_root_relative_layout);
+        if (mIsBabyModeActive) {
+            ViewUtils.setLayoutMarginsInDp(relativeLayout, 0, 0, 0, 0);
+            return;
+        }
         int marginHorizontal = mProperties.getTerminalMarginHorizontal();
         int marginVertical = mProperties.getTerminalMarginVertical();
         ViewUtils.setLayoutMarginsInDp(relativeLayout, marginHorizontal, marginVertical, marginHorizontal, marginVertical);
@@ -544,8 +607,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         final boolean showNow = mPreferences.toogleShowTerminalToolbar();
         Logger.showToast(this, (showNow ? getString(R.string.msg_enabling_terminal_toolbar) : getString(R.string.msg_disabling_terminal_toolbar)), true);
-        terminalToolbarViewPager.setVisibility(showNow ? View.VISIBLE : View.GONE);
-        if (showNow && isTerminalToolbarTextInputViewSelected()) {
+        terminalToolbarViewPager.setVisibility((!mIsBabyModeActive && showNow) ? View.VISIBLE : View.GONE);
+        if (!mIsBabyModeActive && showNow && isTerminalToolbarTextInputViewSelected()) {
             // Focus the text input view if just revealed.
             findViewById(R.id.terminal_toolbar_text_input).requestFocus();
         }
@@ -592,6 +655,240 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             toggleTerminalToolbar();
             return true;
         });
+    }
+
+    private void setBabyModeViews() {
+        mBabyTopBar = findViewById(R.id.baby_top_bar);
+        mBabyProReturnPill = findViewById(R.id.baby_pro_return_pill);
+        mBabyModeEasyTab = findViewById(R.id.baby_mode_easy_tab);
+        mBabyModeProTab = findViewById(R.id.baby_mode_pro_tab);
+        View babySettingsButton = findViewById(R.id.baby_settings_button);
+        View babyHomeRoot = findViewById(R.id.baby_home_root);
+
+        if (babyHomeRoot != null) {
+            mBabyModeController = new BabyModeController(this, babyHomeRoot, new BabyModeController.HostCallbacks() {
+                @Override
+                public void onSwitchToProMode(@Nullable String optionalCommandToRun) {
+                    switchToProMode(optionalCommandToRun);
+                }
+
+                @Override
+                public void onOpenSettings() {
+                    ActivityUtils.startActivity(TermuxActivity.this, new Intent(TermuxActivity.this, SettingsActivity.class));
+                }
+            });
+        }
+
+        if (mBabyModeEasyTab != null) {
+            mBabyModeEasyTab.setOnClickListener(v -> switchToBabyMode());
+        }
+        if (mBabyModeProTab != null) {
+            mBabyModeProTab.setOnClickListener(v -> switchToProMode(null));
+        }
+        if (mBabyProReturnPill != null) {
+            mBabyProReturnPill.setOnClickListener(v -> switchToBabyMode());
+        }
+        if (babySettingsButton != null) {
+            babySettingsButton.setOnClickListener(v ->
+                ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class))
+            );
+        }
+
+        applyModeUi(BabyPreferences.isBabyMode(this), false);
+    }
+
+    public boolean isBabyModeActive() {
+        return mIsBabyModeActive;
+    }
+
+    public void switchToBabyMode() {
+        BabyPreferences.setBabyMode(this, true);
+        applyModeUi(true, false);
+    }
+
+    public void switchToProMode(@Nullable String optionalCommandToRun) {
+        BabyPreferences.setBabyMode(this, false);
+        applyModeUi(false, true);
+        if (optionalCommandToRun != null && !optionalCommandToRun.trim().isEmpty()) {
+            sendCommandToProTerminal(optionalCommandToRun);
+        }
+    }
+
+    private void applyModeUi(boolean babyMode, boolean restoreSoftKeyboard) {
+        mIsBabyModeActive = babyMode;
+        DrawerLayout drawer = getDrawer();
+        ViewPager toolbarPager = getTerminalToolbarViewPager();
+
+        if (babyMode) {
+            if (drawer != null) {
+                drawer.closeDrawers();
+                drawer.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
+            }
+            if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.VISIBLE);
+            if (mBabyProReturnPill != null) mBabyProReturnPill.setVisibility(View.GONE);
+            updateModeSwitcherTabs(true);
+
+            if (mBabyModeController != null) {
+                mBabyModeController.showBabyHome();
+            }
+            if (toolbarPager != null) {
+                toolbarPager.setVisibility(View.GONE);
+            }
+            setMargins();
+
+            if (mTerminalView != null) {
+                KeyboardUtils.hideSoftKeyboard(this, mTerminalView);
+                mTerminalView.clearFocus();
+            }
+            getWindow().getDecorView().setBackgroundColor(ContextCompat.getColor(this, R.color.baby_bg));
+            updateBabySystemBarsAppearance(true);
+        } else {
+            if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.GONE);
+            if (mBabyProReturnPill != null) mBabyProReturnPill.setVisibility(View.VISIBLE);
+            updateModeSwitcherTabs(false);
+
+            if (mBabyModeController != null) {
+                mBabyModeController.hideBabyHome();
+            }
+            if (drawer != null) {
+                drawer.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED);
+            }
+            setMargins();
+            if (toolbarPager != null && mPreferences != null) {
+                toolbarPager.setVisibility(mPreferences.shouldShowTerminalToolbar() ? View.VISIBLE : View.GONE);
+            }
+
+            updateBabySystemBarsAppearance(false);
+            if (mTermuxTerminalSessionActivityClient != null) {
+                mTermuxTerminalSessionActivityClient.updateBackgroundColor();
+            }
+            if (mTerminalView != null) {
+                mTerminalView.requestFocus();
+                mTerminalView.onScreenUpdated();
+            }
+            if (restoreSoftKeyboard && mTermuxTerminalViewClient != null) {
+                mTermuxTerminalViewClient.setSoftKeyboardState(false, false);
+            }
+        }
+    }
+
+    private void updateModeSwitcherTabs(boolean babyActive) {
+        if (mBabyModeEasyTab != null && mBabyModeProTab != null) {
+            int onPrimary = ContextCompat.getColor(this, R.color.baby_on_primary);
+            int secondary = ContextCompat.getColor(this, R.color.baby_text_secondary);
+            if (babyActive) {
+                mBabyModeEasyTab.setBackgroundResource(R.drawable.baby_pill_selected);
+                mBabyModeEasyTab.setTextColor(onPrimary);
+                mBabyModeProTab.setBackground(null);
+                mBabyModeProTab.setTextColor(secondary);
+            } else {
+                mBabyModeEasyTab.setBackground(null);
+                mBabyModeEasyTab.setTextColor(secondary);
+                mBabyModeProTab.setBackgroundResource(R.drawable.baby_pill_selected);
+                mBabyModeProTab.setTextColor(onPrimary);
+            }
+        }
+    }
+
+    private void updateBabySystemBarsAppearance(boolean babyMode) {
+        Window window = getWindow();
+        if (window == null) return;
+        window.clearFlags(
+            WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
+                | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+        );
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+
+        WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(window, window.getDecorView());
+        if (babyMode) {
+            int babyBg = ContextCompat.getColor(this, R.color.baby_bg);
+            window.setStatusBarColor(babyBg);
+            window.setNavigationBarColor(babyBg);
+
+            int nightMask = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            boolean isNight = (nightMask == Configuration.UI_MODE_NIGHT_YES);
+            controller.setAppearanceLightStatusBars(!isNight);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                controller.setAppearanceLightNavigationBars(!isNight);
+            }
+        } else {
+            int proBarColor = 0xFF161920;
+            TerminalSession session = getCurrentSession();
+            if (session != null && session.getEmulator() != null) {
+                proBarColor = session.getEmulator().mColors.mCurrentColors[com.termux.terminal.TextStyle.COLOR_INDEX_BACKGROUND];
+            }
+            window.setStatusBarColor(proBarColor);
+            window.setNavigationBarColor(proBarColor);
+
+            controller.setAppearanceLightStatusBars(false);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                controller.setAppearanceLightNavigationBars(false);
+            }
+        }
+    }
+
+    private void ensureBootstrapAndInitialSession(@Nullable final Intent intent) {
+        if (mIsBootstrapSetupRunning) return;
+        mIsBootstrapSetupRunning = true;
+        TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
+            mIsBootstrapSetupRunning = false;
+            if (mTermuxService == null) return; // Activity might have been destroyed.
+            ensureHushLoginOnce();
+            if (mBabyModeController != null) {
+                mBabyModeController.setEnvironmentReady(true);
+            }
+            try {
+                boolean launchFailsafe = false;
+                if (intent != null && intent.getExtras() != null) {
+                    launchFailsafe = intent.getExtras().getBoolean(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
+                }
+                mTermuxTerminalSessionActivityClient.addNewSession(launchFailsafe, null);
+                flushPendingProCommand();
+            } catch (WindowManager.BadTokenException e) {
+                // Activity finished - ignore.
+            }
+        });
+    }
+
+    private void ensureHushLoginOnce() {
+        try {
+            SharedPreferences prefs = getApplicationContext().getSharedPreferences(BABY_PREFS_NAME, Context.MODE_PRIVATE);
+            if (prefs.getBoolean(KEY_HUSHLOGIN_INITIALIZED, false)) {
+                return;
+            }
+            File homeDir = TermuxConstants.TERMUX_HOME_DIR;
+            if (homeDir != null && (homeDir.isDirectory() || homeDir.mkdirs())) {
+                File hushLogin = new File(homeDir, ".hushlogin");
+                if (!hushLogin.exists()) {
+                    //noinspection ResultOfMethodCallIgnored
+                    hushLogin.createNewFile();
+                }
+                prefs.edit().putBoolean(KEY_HUSHLOGIN_INITIALIZED, true).apply();
+            }
+        } catch (IOException | SecurityException e) {
+            Logger.logDebug(LOG_TAG, "Skipping ~/.hushlogin initialization: " + e.getMessage());
+        }
+    }
+
+    private void sendCommandToProTerminal(@NonNull String command) {
+        TerminalSession session = getCurrentSession();
+        if (session != null && session.isRunning()) {
+            String line = command.endsWith("\n") ? command : command + "\n";
+            session.write(line);
+        } else {
+            mPendingProCommand = command;
+        }
+    }
+
+    private void flushPendingProCommand() {
+        if (mPendingProCommand == null) return;
+        TerminalSession session = getCurrentSession();
+        if (session != null && session.isRunning()) {
+            String cmd = mPendingProCommand;
+            mPendingProCommand = null;
+            String line = cmd.endsWith("\n") ? cmd : cmd + "\n";
+            session.write(line);
+        }
     }
 
 
@@ -795,6 +1092,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logVerbose(LOG_TAG, "onActivityResult: requestCode: " + requestCode + ", resultCode: "  + resultCode + ", data: "  + IntentUtils.getIntentString(data));
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
             requestStoragePermission(true);
+        } else if (requestCode == BabyOnboardingActivity.REQUEST_CODE_ONBOARDING) {
+            mIsOnboardingInProgress = false;
+            applyModeUi(BabyPreferences.isBabyMode(this), false);
+            if (mBabyModeController != null) {
+                mBabyModeController.refreshState();
+            }
         }
     }
 

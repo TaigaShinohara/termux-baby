@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Top Bar & Mode Switcher -->
+    <string name="baby_mode_easy">かんたん</string>
+    <string name="baby_mode_pro">ターミナル</string>
+    <string name="baby_mode_switch_cd">かんたんモードとターミナルモードを切り替え</string>
+    <string name="baby_settings_cd">設定を開く</string>
+
+    <!-- Baby Home -->
+    <string name="baby_home_greeting">なにをしようか？</string>
+    <string name="baby_home_status_ready">準備完了</string>
+    <string name="baby_home_status_preparing">準備しています…</string>
+    <string name="baby_home_find_action">ことばで探す</string>
+    <string name="baby_home_find_action_cd">やりたいことを日常の言葉で探す</string>
+    <string name="baby_home_recommended_badge">まずはこれ</string>
+
+    <!-- 6 Core Action Cards -->
+    <string name="baby_action_files_title">ファイルを見る</string>
+    <string name="baby_action_files_sub">フォルダの中身</string>
+
+    <string name="baby_action_install_title">ツールを入れる</string>
+    <string name="baby_action_install_sub">便利な道具を追加</string>
+
+    <string name="baby_action_network_title">ネット確認</string>
+    <string name="baby_action_network_sub">つながるかテスト</string>
+
+    <string name="baby_action_note_title">メモを書く</string>
+    <string name="baby_action_note_sub">かんたん保存</string>
+
+    <string name="baby_action_device_title">スマホ情報</string>
+    <string name="baby_action_device_sub">空き容量と環境</string>
+
+    <string name="baby_action_python_title">Pythonを試す</string>
+    <string name="baby_action_python_sub">はじめての実行</string>
+
+    <!-- Friendly Runner Sheet -->
+    <string name="baby_runner_running">いま動かしています…</string>
+    <string name="baby_runner_done">できた！</string>
+    <string name="baby_runner_error_title">うまくいきませんでした</string>
+    <string name="baby_runner_show_details">くわしい文字を見る</string>
+    <string name="baby_runner_hide_details">くわしい文字を閉じる</string>
+    <string name="baby_runner_open_pro">ターミナルで開く</string>
+    <string name="baby_runner_run_again">もう一度ためす</string>
+    <string name="baby_runner_close">とじる</string>
+    <string name="baby_runner_cancel">とめる</string>
+    <string name="baby_runner_install_now">今すぐ入れる</string>
+    <string name="baby_runner_empty_output">無事に完了しました（表示する文字はありません）。</string>
+    <string name="baby_runner_command_label">実行したコマンド:</string>
+
+    <!-- Output Formatter Friendly Summaries -->
+    <string name="baby_summary_files_empty">まだファイルはありません。「メモを書く」で最初の一つを作ってみましょう！</string>
+    <string name="baby_summary_files_count">ホームフォルダに %1$d 件の項目があります。</string>
+    <string name="baby_summary_network_online">インターネットにつながっています。</string>
+    <string name="baby_summary_network_online_ms">インターネットにつながっています（応答 %1$s ms）。</string>
+    <string name="baby_summary_network_offline">インターネットにつながっていないようです。Wi-Fiや通信を確認してみてください。</string>
+    <string name="baby_summary_device_info">端末タイプ: %1$s\n空き容量: %2$s</string>
+    <string name="baby_summary_python_hello">Pythonが元気に動きました！</string>
+    <string name="baby_summary_python_missing">まだPythonが入っていないようです。下のボタンから1タップで入れられます。</string>
+    <string name="baby_summary_install_done">%1$s を使う準備ができました！</string>
+    <string name="baby_summary_generic_done">スムーズに完了しました！</string>
+
+    <!-- Friendly Error Translator -->
+    <string name="baby_error_command_not_found">まだこの道具が入っていないようです。</string>
+    <string name="baby_error_network">インターネットにつながっていないようです。Wi-Fiや通信を確認してみてください。</string>
+    <string name="baby_error_permission">この場所を開く許可がありません。ホームフォルダで試してみてください。</string>
+    <string name="baby_error_not_found">そのファイルやフォルダが見つかりませんでした。</string>
+    <string name="baby_error_timeout">時間がかかりすぎたため安全に止めました。もう一度試せます。</string>
+    <string name="baby_error_generic">うまくいきませんでした。もう一度試すか、下のくわしい出力を確認できます。</string>
+
+    <!-- Command Helper Sheet -->
+    <string name="baby_helper_title">ことばで探す</string>
+    <string name="baby_helper_search_hint">やりたいことを入力…</string>
+    <string name="baby_helper_cat_all">すべて</string>
+    <string name="baby_helper_cat_files">ファイル</string>
+    <string name="baby_helper_cat_network">ネット</string>
+    <string name="baby_helper_cat_learn">学習</string>
+    <string name="baby_helper_cat_tools">ツール</string>
+    <string name="baby_helper_empty">見つかりませんでした。別のことばで試してみてください。</string>
+    <string name="baby_helper_run">実行する</string>
+    <string name="baby_helper_input_cancel">やめる</string>
+    <string name="baby_helper_command_preview">実行: %1$s</string>
+
+    <!-- Command Helper Recipes -->
+    <string name="baby_recipe_pwd_title">いまの場所を見る</string>
+    <string name="baby_recipe_pwd_sub">現在開いているフォルダを表示</string>
+    <string name="baby_recipe_mkdir_title">フォルダをつくる</string>
+    <string name="baby_recipe_mkdir_sub">新しいフォルダを作成</string>
+    <string name="baby_recipe_mkdir_hint">フォルダ名（例: memo）</string>
+    <string name="baby_recipe_find_title">ファイルをさがす</string>
+    <string name="baby_recipe_find_sub">名前の一部から検索</string>
+    <string name="baby_recipe_find_hint">さがす文字（例: note）</string>
+    <string name="baby_recipe_disk_title">空き容量を見る</string>
+    <string name="baby_recipe_disk_sub">ストレージの残りを確認</string>
+    <string name="baby_recipe_date_title">日付と時刻を見る</string>
+    <string name="baby_recipe_date_sub">現在時刻を表示</string>
+    <string name="baby_recipe_ip_title">IPアドレスを見る</string>
+    <string name="baby_recipe_ip_sub">ネット上の接続アドレスを確認</string>
+    <string name="baby_recipe_update_title">ツール一覧を更新</string>
+    <string name="baby_recipe_update_sub">最新のパッケージ情報を取得</string>
+    <string name="baby_recipe_python_calc_title">Pythonで計算する</string>
+    <string name="baby_recipe_python_calc_sub">かんたんな式を計算</string>
+    <string name="baby_recipe_python_calc_hint">計算式（例: 12 * 34）</string>
+
+    <!-- Quick Note Sheet -->
+    <string name="baby_note_title">メモを書く</string>
+    <string name="baby_note_hint">覚えておきたいことを自由にどうぞ…</string>
+    <string name="baby_note_save">メモを保存</string>
+    <string name="baby_note_saved">%1$s に保存しました</string>
+    <string name="baby_note_empty_error">まずはメモの内容を書いてみてください。</string>
+    <string name="baby_note_recent_title">最近のメモ</string>
+    <string name="baby_note_empty_list">まだ保存されたメモはありません。</string>
+    <string name="baby_note_close">とじる</string>
+
+    <!-- Tool Installer Sheet -->
+    <string name="baby_installer_title">ツールを入れる</string>
+    <string name="baby_installer_subtitle">おすすめツールを1タップで追加できます。</string>
+    <string name="baby_installer_install">入れる</string>
+    <string name="baby_installer_installed">導入済み</string>
+    <string name="baby_installer_try">試す</string>
+
+    <string name="baby_tool_python_name">Python</string>
+    <string name="baby_tool_python_desc">プログラミング学習や自動化に人気の言語</string>
+    <string name="baby_tool_git_name">Git</string>
+    <string name="baby_tool_git_desc">プログラムの取得や保存に使う道具</string>
+    <string name="baby_tool_nano_name">Nano</string>
+    <string name="baby_tool_nano_desc">ターミナルで使えるシンプルなメモ帳</string>
+    <string name="baby_tool_tree_name">Tree</string>
+    <string name="baby_tool_tree_desc">フォルダの中身を木のように見やすく表示</string>
+
+    <!-- Gentle First-Run Onboarding (7 Pages) -->
+    <string name="baby_onboarding_skip">スキップ</string>
+    <string name="baby_onboarding_next">つぎへ</string>
+    <string name="baby_onboarding_back">もどる</string>
+    <string name="baby_onboarding_progress_cd">ステップ %1$d / %2$d</string>
+
+    <!-- Page 1: Hook -->
+    <string name="baby_onboarding_p1_title">コマンドいらずのやさしいターミナル</string>
+    <string name="baby_onboarding_p1_body">日常のことばのカードを押すだけで、安心して使えます。</string>
+
+    <!-- Page 2: 3-Choice Goal Selector -->
+    <string name="baby_onboarding_p2_title">いま一番やってみたいことは？</string>
+    <string name="baby_onboarding_choice_1">ツールやPythonをさわってみたい</string>
+    <string name="baby_onboarding_choice_2">ファイルやスマホをかんたんに確認したい</string>
+    <string name="baby_onboarding_choice_3">まだわからない・まずは見てみたい</string>
+    <string name="baby_onboarding_praise_1">いいですね！スマホでPythonを試すのはとても楽しいですよ。</string>
+    <string name="baby_onboarding_praise_2">すてきです！ファイルや空き容量の確認から始めましょう。</string>
+    <string name="baby_onboarding_praise_3">もちろん大丈夫！ゆっくり試しながら使えます。</string>
+
+    <!-- Page 3: Match Declaration -->
+    <string name="baby_onboarding_p3_title">そんなあなたに、Termux Baby がぴったり</string>
+    <string name="baby_onboarding_match_1">難しいコマンドを覚えなくても、1タップでPythonやツールを試せます。</string>
+    <string name="baby_onboarding_match_2">ファイルや容量・ネットの状態を、わかりやすい日本語ですぐ確認できます。</string>
+    <string name="baby_onboarding_match_3">どのカードも安全に押せるので、自分のペースでゆっくり慣れられます。</string>
+
+    <!-- Page 4: Step 1/3 -->
+    <string name="baby_onboarding_p4_title">1. カードを選ぶ</string>
+    <string name="baby_onboarding_p4_body">アイコンと短い言葉から、やりたいことを選ぶだけ。</string>
+
+    <!-- Page 5: Step 2/3 -->
+    <string name="baby_onboarding_p5_title">2. やさしい結果を見る</string>
+    <string name="baby_onboarding_p5_body">難しい英語ではなく、わかりやすい結果が表示されます。</string>
+
+    <!-- Page 6: Step 3/3 -->
+    <string name="baby_onboarding_p6_title">3. いつでも本格画面へ</string>
+    <string name="baby_onboarding_p6_body">上の切替ボタンで、いつでも通常のターミナルへ移動できます。</string>
+
+    <!-- Page 7: CTA -->
+    <string name="baby_onboarding_p7_title">まずは1つ、押してみよう</string>
+    <string name="baby_onboarding_p7_body">選んだ目的にぴったりのカードを目立つようにしておきました。</string>
+    <string name="baby_onboarding_start">かんたんホームをひらく</string>
+
+    <!-- Settings Additions -->
+    <string name="baby_pref_category_title">Termux Baby</string>
+    <string name="baby_pref_replay_onboarding_title">かんたんガイドをもう一度見る</string>
+    <string name="baby_pref_replay_onboarding_summary">初回の3ステップ案内をもう一度表示します</string>
+    <string name="baby_pref_default_mode_title">起動時にかんたんモードを開く</string>
+    <string name="baby_pref_default_mode_summary_baby">ワンタップカード画面で開く（初心者におすすめ）</string>
+    <string name="baby_pref_default_mode_summary_pro">通常のターミナル画面で直接開く</string>
+</resources>

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/baby_onboarding_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/baby_bg"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- Top Navigation Bar: Back (left) and neutral Skip (right) -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/baby_onboarding_back_button"
+            style="@style/Widget.Baby.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:contentDescription="@string/baby_onboarding_back"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:text="@string/baby_onboarding_back"
+            android:visibility="invisible" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/baby_onboarding_skip_button"
+            style="@style/Widget.Baby.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:contentDescription="@string/baby_onboarding_skip"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:text="@string/baby_onboarding_skip" />
+
+    </RelativeLayout>
+
+    <!-- 7-Page Onboarding Content -->
+    <androidx.viewpager.widget.ViewPager
+        android:id="@+id/baby_onboarding_pager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:overScrollMode="never" />
+
+    <!-- Bottom Thumb-Zone Controls: Window Dots + Primary Action -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="24dp">
+
+        <com.termux.app.baby.onboarding.WindowDotsIndicatorView
+            android:id="@+id/baby_onboarding_dots"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:importantForAccessibility="no" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/baby_onboarding_next_button"
+            style="@style/Widget.Baby.PrimaryButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="54dp"
+            android:text="@string/baby_onboarding_next"
+            app:rippleColor="@color/baby_ripple" />
+
+    </LinearLayout>
+
+</LinearLayout>

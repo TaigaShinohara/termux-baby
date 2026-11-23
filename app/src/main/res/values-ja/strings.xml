@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!DOCTYPE resources [
+    <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
+    <!ENTITY TERMUX_APP_NAME "Termux Baby">
+    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    ]>
+
+<resources>
+
+    <string name="application_name">&TERMUX_APP_NAME;</string>
+    <string name="shared_user_label">&TERMUX_APP_NAME; ユーザー</string>
+
+    <!-- Termux Bootstrap Packages Installation -->
+    <string name="bootstrap_installer_body">はじめての準備をしています…</string>
+    <string name="bootstrap_error_title">初期設定に失敗しました</string>
+    <string name="bootstrap_error_body">&TERMUX_APP_NAME; の初期データの準備ができませんでした。</string>
+    <string name="bootstrap_error_abort">中止</string>
+    <string name="bootstrap_error_try_again">もう一度試す</string>
+
+    <!-- Terminal Sidebar and Shortcuts -->
+    <string name="action_new_session">新しい画面</string>
+    <string name="action_new_session_failsafe">セーフモード</string>
+    <string name="title_max_terminals_reached">画面数の上限に達しました</string>
+    <string name="msg_max_terminals_reached">新しい画面を開く前に、既存の画面を閉じてください。</string>
+
+    <string name="title_rename_session">画面の名前を設定</string>
+    <string name="action_rename_session_confirm">設定</string>
+    <string name="title_create_named_session">名前をつけて新しい画面</string>
+    <string name="action_create_named_session_confirm">作成</string>
+
+    <string name="action_toggle_soft_keyboard">キーボード</string>
+
+    <string name="msg_enabling_terminal_toolbar">補助キーバーを表示しました</string>
+    <string name="msg_disabling_terminal_toolbar">補助キーバーを隠しました</string>
+
+    <!-- Terminal Popup -->
+    <string name="action_select_url">URLを選択</string>
+    <string name="title_select_url_dialog">タップでコピー、長押しで開く</string>
+    <string name="title_select_url_none_found">URLが見つかりませんでした。</string>
+    <string name="msg_select_url_copied_to_clipboard">URLをコピーしました</string>
+
+    <string name="action_share_transcript">履歴を共有</string>
+    <string name="title_share_transcript">ターミナルの履歴</string>
+    <string name="title_share_transcript_with">共有先を選択:</string>
+
+    <string name="action_share_selected_text">選択文字を共有</string>
+    <string name="title_share_selected_text">選択したテキスト</string>
+    <string name="title_share_selected_text_with">共有先を選択:</string>
+
+    <string name="action_reset_terminal">画面をリセット</string>
+    <string name="msg_terminal_reset">画面をリセットしました</string>
+
+    <string name="action_kill_process">終了する (%d)</string>
+    <string name="title_confirm_kill_process">このセッションを終了しますか？</string>
+
+    <string name="action_style_terminal">見た目</string>
+    <string name="action_toggle_keep_screen_on">画面を消さない</string>
+    <string name="action_open_help">ヘルプ</string>
+    <string name="action_open_settings">設定</string>
+
+    <string name="action_report_issue">不具合を報告</string>
+    <string name="msg_generating_report">レポートを作成中</string>
+
+    <!-- Termux Notifications -->
+    <string name="notification_action_exit">終了</string>
+    <string name="notification_action_wake_lock">スリープ防止ON</string>
+    <string name="notification_action_wake_unlock">スリープ防止OFF</string>
+
+    <!-- Termux File Receiver -->
+    <string name="title_file_received">~/downloads/ にファイルを保存</string>
+    <string name="action_file_received_edit">編集</string>
+    <string name="action_file_received_open_directory">フォルダを開く</string>
+
+    <!-- Termux Settings -->
+    <string name="title_activity_termux_settings">&TERMUX_APP_NAME; 設定</string>
+    <string name="termux_preferences_title">&TERMUX_APP_NAME;</string>
+    <string name="termux_preferences_summary">&TERMUX_APP_NAME; の動作設定</string>
+    <string name="termux_debugging_preferences_title">デバッグ</string>
+    <string name="termux_debugging_preferences_summary">ログやデバッグ用の設定</string>
+    <string name="termux_terminal_io_preferences_title">キーボードと入力</string>
+    <string name="termux_terminal_io_preferences_summary">ソフトウェアキーボードなどの設定</string>
+    <string name="termux_keyboard_header">キーボード</string>
+    <string name="termux_soft_keyboard_enabled_title">ソフトキーボードを有効にする</string>
+    <string name="termux_terminal_view_preferences_title">ターミナル表示</string>
+    <string name="termux_terminal_view_preferences_summary">ターミナル画面の表示設定</string>
+    <string name="about_preference_title">このアプリについて</string>
+    <string name="donate_preference_title">開発を支援</string>
+
+</resources>

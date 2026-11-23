@@ -89,6 +89,12 @@
         </activity-alias>
 
         <activity
+            android:name=".app.baby.onboarding.BabyOnboardingActivity"
+            android:exported="false"
+            android:label="@string/application_name"
+            android:theme="@style/Theme.TermuxBaby.Onboarding" />
+
+        <activity
             android:name=".app.activities.HelpActivity"
             android:exported="false"
             android:label="@string/application_name"

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Termux Baby Design Tokens — Dark Theme (Warm Slate + Soft Mint) -->
+    <!-- All text/primary pairings verified >= 4.5:1 WCAG AA contrast -->
+    <color name="baby_bg">#161920</color>
+    <color name="baby_surface">#202530</color>
+    <color name="baby_surface_subtle">#29303E</color>
+
+    <color name="baby_primary">#52C7AC</color>
+    <color name="baby_on_primary">#0C2620</color>
+    <color name="baby_primary_container">#1B3B35</color>
+    <color name="baby_on_primary_container">#B9EFE2</color>
+
+    <color name="baby_text_primary">#EEF2F5</color>
+    <color name="baby_text_secondary">#9CA8B3</color>
+    <color name="baby_border">#2E3646</color>
+
+    <color name="baby_success">#52C7AC</color>
+    <color name="baby_success_container">#1B3B35</color>
+
+    <color name="baby_warning">#F0B254</color>
+    <color name="baby_warning_container">#3B2E1A</color>
+
+    <color name="baby_error">#EE7A7A</color>
+    <color name="baby_error_container">#3D2224</color>
+
+    <color name="baby_code_bg">#12151B</color>
+    <color name="baby_ripple">#2952C7AC</color>
+    <color name="baby_dot_inactive">#3D4657</color>
+    <color name="baby_sheet_handle">#434D5F</color>
+
+    <!-- Launcher Icon Brand Colors -->
+    <color name="baby_launcher_bg_start">#1F7D68</color>
+    <color name="baby_launcher_bg_end">#2B9A81</color>
+</resources>

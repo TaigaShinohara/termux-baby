@@ -501,6 +501,11 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 try (InputStream in = new FileInputStream(colorsFile)) {
                     props.load(in);
                 }
+            } else {
+                // Termux Baby warm slate defaults when no custom ~/.termux/colors.properties exists
+                props.setProperty("background", "#161920");
+                props.setProperty("foreground", "#EEF2F5");
+                props.setProperty("cursor", "#52C7AC");
             }
 
             TerminalColors.COLOR_SCHEME.updateWith(props);
@@ -518,7 +523,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     }
 
     public void updateBackgroundColor() {
-        if (!mActivity.isVisible()) return;
+        if (!mActivity.isVisible() || mActivity.isBabyModeActive()) return;
         TerminalSession session = mActivity.getCurrentSession();
         if (session != null && session.getEmulator() != null) {
             mActivity.getWindow().getDecorView().setBackgroundColor(session.getEmulator().mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND]);

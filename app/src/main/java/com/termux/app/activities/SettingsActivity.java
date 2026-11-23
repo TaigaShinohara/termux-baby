@@ -8,8 +8,11 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.SwitchPreferenceCompat;
 
 import com.termux.R;
+import com.termux.app.baby.BabyPreferences;
+import com.termux.app.baby.onboarding.BabyOnboardingActivity;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.models.ReportInfo;
@@ -60,6 +63,8 @@ public class SettingsActivity extends AppCompatActivity {
 
             setPreferencesFromResource(R.xml.root_preferences, rootKey);
 
+            configureTermuxBabyPreferences(context);
+
             new Thread() {
                 @Override
                 public void run() {
@@ -71,6 +76,28 @@ public class SettingsActivity extends AppCompatActivity {
                     configureDonatePreference(context);
                 }
             }.start();
+        }
+
+        private void configureTermuxBabyPreferences(@NonNull Context context) {
+            SwitchPreferenceCompat defaultModePref = findPreference("baby_default_mode");
+            if (defaultModePref != null) {
+                defaultModePref.setChecked(BabyPreferences.isBabyMode(context));
+                defaultModePref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    if (newValue instanceof Boolean) {
+                        BabyPreferences.setBabyMode(context, (Boolean) newValue);
+                        return true;
+                    }
+                    return false;
+                });
+            }
+
+            Preference replayOnboardingPref = findPreference("baby_replay_onboarding");
+            if (replayOnboardingPref != null) {
+                replayOnboardingPref.setOnPreferenceClickListener(preference -> {
+                    startActivity(BabyOnboardingActivity.createIntent(context, true));
+                    return true;
+                });
+            }
         }
 
         private void configureTermuxAPIPreference(@NonNull Context context) {

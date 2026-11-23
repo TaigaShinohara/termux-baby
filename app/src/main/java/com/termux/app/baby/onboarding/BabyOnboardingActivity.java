@@ -1,0 +1,328 @@
+package com.termux.app.baby.onboarding;
+
+import android.content.Context;
+import android.content.Intent;
+import android.content.res.Configuration;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.view.Window;
+import android.view.animation.DecelerateInterpolator;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.viewpager.widget.ViewPager;
+
+import com.google.android.material.button.MaterialButton;
+import com.termux.R;
+import com.termux.app.TermuxActivity;
+import com.termux.app.baby.BabyPreferences;
+import com.termux.shared.activity.media.AppCompatActivityUtils;
+import com.termux.shared.theme.NightMode;
+
+/**
+ * Gentle 7-page first-run onboarding activity for Termux Baby.
+ *
+ * Follows 1-page-1-claim, 3-choice goal selector with immediate tactile + praise response
+ * followed by a 950ms linger before auto-advancing to the dedicated Match Declaration page,
+ * 3-step visual how-it-works, 5-dot windowed progress indicator, neutral skip/back navigation,
+ * and clean finish into Baby Mode.
+ */
+public class BabyOnboardingActivity extends AppCompatActivity
+    implements BabyOnboardingPagerAdapter.OnboardingInteractionListener {
+
+    /** Recommended request code when launching from TermuxActivity via startActivityForResult. */
+    public static final int REQUEST_CODE_ONBOARDING = 4101;
+
+    /** Optional boolean extra: when true, explicitly starts TermuxActivity upon completion. */
+    public static final String EXTRA_LAUNCH_TERMUX_ON_FINISH = "com.termux.baby.LAUNCH_TERMUX_ON_FINISH";
+
+    private static final String STATE_CURRENT_PAGE = "state_current_page";
+    private static final String STATE_SELECTED_GOAL = "state_selected_goal";
+    private static final String STATE_HAS_SELECTED_GOAL = "state_has_selected_goal";
+
+    private static final long CHOICE_LINGER_BEFORE_ADVANCE_MS = 950L;
+    private static final long COMPLETION_PULSE_DELAY_MS = 180L;
+
+    private ViewPager mPager;
+    private BabyOnboardingPagerAdapter mAdapter;
+    private WindowDotsIndicatorView mDotsIndicator;
+    private MaterialButton mBackButton;
+    private MaterialButton mSkipButton;
+    private MaterialButton mNextButton;
+
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    @Nullable
+    private Runnable mPendingAutoAdvanceRunnable;
+
+    private int mCurrentPage = BabyOnboardingPagerAdapter.PAGE_HOOK;
+    @NonNull
+    private String mSelectedGoal = BabyPreferences.GOAL_EXPLORE;
+    private boolean mHasUserSelectedGoal = false;
+    private boolean mIsFinishingOnboarding = false;
+    private boolean mLaunchTermuxOnFinish = false;
+
+    /** Returns true if first-run onboarding has not yet been completed or skipped. */
+    public static boolean shouldShowOnboarding(@NonNull Context context) {
+        return !BabyPreferences.isOnboardingCompleted(context);
+    }
+
+    /** Creates an intent to show onboarding (returns to caller via finish() + RESULT_OK). */
+    @NonNull
+    public static Intent createIntent(@NonNull Context context) {
+        return createIntent(context, false);
+    }
+
+    /**
+     * Creates an intent to show onboarding.
+     *
+     * @param launchTermuxOnFinish If true (e.g. when opened from Settings), brings TermuxActivity
+     *                             to front in Baby Mode when onboarding completes.
+     */
+    @NonNull
+    public static Intent createIntent(@NonNull Context context, boolean launchTermuxOnFinish) {
+        Intent intent = new Intent(context, BabyOnboardingActivity.class);
+        intent.putExtra(EXTRA_LAUNCH_TERMUX_ON_FINISH, launchTermuxOnFinish);
+        return intent;
+    }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        AppCompatActivityUtils.setNightMode(this, NightMode.getAppNightMode().getName(), true);
+        setContentView(R.layout.activity_baby_onboarding);
+        configureSystemBarsAppearance();
+
+        mLaunchTermuxOnFinish = getIntent().getBooleanExtra(EXTRA_LAUNCH_TERMUX_ON_FINISH, false);
+
+        if (savedInstanceState != null) {
+            mCurrentPage = savedInstanceState.getInt(STATE_CURRENT_PAGE, BabyOnboardingPagerAdapter.PAGE_HOOK);
+            String savedGoal = savedInstanceState.getString(STATE_SELECTED_GOAL, BabyPreferences.GOAL_EXPLORE);
+            mSelectedGoal = savedGoal != null ? savedGoal : BabyPreferences.GOAL_EXPLORE;
+            mHasUserSelectedGoal = savedInstanceState.getBoolean(STATE_HAS_SELECTED_GOAL, false);
+        }
+
+        mPager = findViewById(R.id.baby_onboarding_pager);
+        mDotsIndicator = findViewById(R.id.baby_onboarding_dots);
+        mBackButton = findViewById(R.id.baby_onboarding_back_button);
+        mSkipButton = findViewById(R.id.baby_onboarding_skip_button);
+        mNextButton = findViewById(R.id.baby_onboarding_next_button);
+
+        mAdapter = new BabyOnboardingPagerAdapter(this, this);
+        mAdapter.setSelectedGoal(mSelectedGoal, mHasUserSelectedGoal);
+
+        mPager.setAdapter(mAdapter);
+        mPager.setOffscreenPageLimit(2);
+        mPager.setCurrentItem(mCurrentPage, false);
+
+        mDotsIndicator.setPageCount(BabyOnboardingPagerAdapter.PAGE_COUNT);
+        mDotsIndicator.setCurrentPage(mCurrentPage, false);
+
+        mPager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
+            @Override
+            public void onPageSelected(int position) {
+                cancelPendingAutoAdvance();
+                int previous = mCurrentPage;
+                mCurrentPage = position;
+                mAdapter.onPageLeft(previous);
+                mDotsIndicator.setCurrentPage(position, true);
+                updateChromeForPage(position);
+                mAdapter.onPageBecameVisible(position);
+                announceCurrentPageHeadline(position);
+            }
+
+            @Override
+            public void onPageScrollStateChanged(int state) {
+                if (state == ViewPager.SCROLL_STATE_DRAGGING) {
+                    // Respect user gesture immediately during choice linger
+                    cancelPendingAutoAdvance();
+                }
+            }
+        });
+
+        // Neutral Back button (no praise, no confirm haptic)
+        mBackButton.setOnClickListener(v -> {
+            cancelPendingAutoAdvance();
+            if (mCurrentPage > 0) {
+                mPager.setCurrentItem(mCurrentPage - 1, BabyPreferences.areAnimationsEnabled(this));
+            }
+        });
+
+        // Neutral Skip button (no praise, no guilt, marks onboarding completed)
+        mSkipButton.setOnClickListener(v -> {
+            cancelPendingAutoAdvance();
+            completeOnboarding(false);
+        });
+
+        // Primary Next / Start button
+        mNextButton.setOnClickListener(v -> {
+            if (mIsFinishingOnboarding) return;
+            cancelPendingAutoAdvance();
+            if (mCurrentPage < BabyOnboardingPagerAdapter.PAGE_COUNT - 1) {
+                BabyOnboardingPagerAdapter.performGentleHaptic(v);
+                pulseButtonLightly(v);
+                mPager.setCurrentItem(mCurrentPage + 1, BabyPreferences.areAnimationsEnabled(this));
+            } else {
+                // Final CTA: celebratory confirm haptic + gentle pulse + launch Baby Home
+                BabyOnboardingPagerAdapter.performConfirmHaptic(v);
+                completeOnboarding(true);
+            }
+        });
+
+        updateChromeForPage(mCurrentPage);
+        mPager.post(() -> mAdapter.onPageBecameVisible(mCurrentPage));
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt(STATE_CURRENT_PAGE, mCurrentPage);
+        outState.putString(STATE_SELECTED_GOAL, mSelectedGoal);
+        outState.putBoolean(STATE_HAS_SELECTED_GOAL, mHasUserSelectedGoal);
+    }
+
+    @Override
+    protected void onDestroy() {
+        cancelPendingAutoAdvance();
+        mMainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        cancelPendingAutoAdvance();
+        if (mCurrentPage > 0) {
+            mPager.setCurrentItem(mCurrentPage - 1, BabyPreferences.areAnimationsEnabled(this));
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    public void onGoalChoiceSelected(@NonNull String goal) {
+        mSelectedGoal = goal;
+        mHasUserSelectedGoal = true;
+        BabyPreferences.setOnboardingGoal(this, goal);
+
+        // Cancel any previous timer to prevent double-advance on rapid taps
+        cancelPendingAutoAdvance();
+
+        // Linger 950ms so the user reads the specific praise before advancing to Match Declaration
+        mPendingAutoAdvanceRunnable = () -> {
+            mPendingAutoAdvanceRunnable = null;
+            if (!isFinishing() && mCurrentPage == BabyOnboardingPagerAdapter.PAGE_CHOICE) {
+                mPager.setCurrentItem(
+                    BabyOnboardingPagerAdapter.PAGE_MATCH,
+                    BabyPreferences.areAnimationsEnabled(BabyOnboardingActivity.this)
+                );
+            }
+        };
+        mMainHandler.postDelayed(mPendingAutoAdvanceRunnable, CHOICE_LINGER_BEFORE_ADVANCE_MS);
+    }
+
+    @Override
+    public void onPraiseTappedToAdvance() {
+        if (mPendingAutoAdvanceRunnable != null && mCurrentPage == BabyOnboardingPagerAdapter.PAGE_CHOICE) {
+            cancelPendingAutoAdvance();
+            mPager.setCurrentItem(
+                BabyOnboardingPagerAdapter.PAGE_MATCH,
+                BabyPreferences.areAnimationsEnabled(this)
+            );
+        }
+    }
+
+    private void cancelPendingAutoAdvance() {
+        if (mPendingAutoAdvanceRunnable != null) {
+            mMainHandler.removeCallbacks(mPendingAutoAdvanceRunnable);
+            mPendingAutoAdvanceRunnable = null;
+        }
+    }
+
+    private void updateChromeForPage(int position) {
+        // Back button: hidden on Page 1, visible on Pages 2..7
+        mBackButton.setVisibility(position == BabyOnboardingPagerAdapter.PAGE_HOOK ? View.INVISIBLE : View.VISIBLE);
+
+        // Skip button: always visible on Pages 1..6, hidden on final CTA page
+        mSkipButton.setVisibility(position == BabyOnboardingPagerAdapter.PAGE_CTA ? View.INVISIBLE : View.VISIBLE);
+
+        // Next / Start button: strictly hidden on the 3-choice page so tapping a choice IS the forward action
+        if (position == BabyOnboardingPagerAdapter.PAGE_CHOICE) {
+            mNextButton.setVisibility(View.INVISIBLE);
+            mNextButton.setEnabled(false);
+        } else {
+            mNextButton.setVisibility(View.VISIBLE);
+            mNextButton.setEnabled(true);
+            if (position == BabyOnboardingPagerAdapter.PAGE_CTA) {
+                mNextButton.setText(R.string.baby_onboarding_start);
+            } else {
+                mNextButton.setText(R.string.baby_onboarding_next);
+            }
+        }
+    }
+
+    private void completeOnboarding(boolean celebratedFinish) {
+        if (mIsFinishingOnboarding) return;
+        mIsFinishingOnboarding = true;
+
+        BabyPreferences.setOnboardingGoal(this, mSelectedGoal);
+        BabyPreferences.setOnboardingCompleted(this, true);
+        BabyPreferences.setBabyMode(this, true);
+
+        setResult(RESULT_OK);
+
+        if (celebratedFinish && BabyPreferences.areAnimationsEnabled(this)) {
+            pulseButtonLightly(mNextButton);
+            mMainHandler.postDelayed(this::finishIntoBabyHome, COMPLETION_PULSE_DELAY_MS);
+        } else {
+            finishIntoBabyHome();
+        }
+    }
+
+    private void finishIntoBabyHome() {
+        if (mLaunchTermuxOnFinish || isTaskRoot()) {
+            Intent intent = new Intent(this, TermuxActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(intent);
+        }
+        finish();
+    }
+
+    private void pulseButtonLightly(@NonNull View view) {
+        if (!BabyPreferences.areAnimationsEnabled(this)) return;
+        view.animate().cancel();
+        view.animate()
+            .scaleX(0.97f)
+            .scaleY(0.97f)
+            .setDuration(90L)
+            .setInterpolator(new DecelerateInterpolator())
+            .withEndAction(() -> view.animate()
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(120L)
+                .setInterpolator(new DecelerateInterpolator())
+                .start())
+            .start();
+    }
+
+    private void announceCurrentPageHeadline(int position) {
+        CharSequence headline = mAdapter.getPageHeadline(position);
+        mPager.announceForAccessibility(headline);
+    }
+
+    private void configureSystemBarsAppearance() {
+        Window window = getWindow();
+        if (window == null) return;
+        int nightMask = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        boolean isNight = (nightMask == Configuration.UI_MODE_NIGHT_YES);
+        WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(window, window.getDecorView());
+        controller.setAppearanceLightStatusBars(!isNight);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            controller.setAppearanceLightNavigationBars(!isNight);
+        }
+    }
+}

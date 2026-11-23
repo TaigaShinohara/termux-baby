@@ -1,5 +1,23 @@
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory
+        app:key="termux_baby_category"
+        app:title="@string/baby_pref_category_title">
+
+        <SwitchPreferenceCompat
+            app:key="baby_default_mode"
+            app:title="@string/baby_pref_default_mode_title"
+            app:summaryOn="@string/baby_pref_default_mode_summary_baby"
+            app:summaryOff="@string/baby_pref_default_mode_summary_pro"
+            app:persistent="false" />
+
+        <Preference
+            app:key="baby_replay_onboarding"
+            app:title="@string/baby_pref_replay_onboarding_title"
+            app:summary="@string/baby_pref_replay_onboarding_summary"
+            app:persistent="false" />
+    </PreferenceCategory>
+
     <Preference
         app:key="termux"
         app:title="@string/termux_preferences_title"
