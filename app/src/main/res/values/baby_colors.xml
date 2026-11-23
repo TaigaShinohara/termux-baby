@@ -39,4 +39,7 @@
     <color name="baby_extra_keys_key_text">#F1F5F9</color>
     <color name="baby_extra_keys_key_active_bg">#52C7AC</color>
     <color name="baby_extra_keys_key_active_text">#0D1B18</color>
+
+    <!-- Pro Terminal chrome (drawer) in light mode: soft slate instead of pure white -->
+    <color name="baby_pro_drawer_bg_light">#EDF1F5</color>
 </resources>

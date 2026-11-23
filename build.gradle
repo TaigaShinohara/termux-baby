@@ -5,6 +5,9 @@ buildscript {
     }
     dependencies {
         classpath "com.android.tools.build:gradle:8.13.2"
+        // Kotlin is used for unit/screenshot tests only (Roborazzi is Kotlin-first);
+        // app main sources remain Java.
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.21"
     }
 }
 

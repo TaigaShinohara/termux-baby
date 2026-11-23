@@ -502,10 +502,30 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                     props.load(in);
                 }
             } else {
-                // Termux Baby warm slate defaults when no custom ~/.termux/colors.properties exists
+                // Termux Baby warm slate defaults when no custom ~/.termux/colors.properties exists.
+                // Full palette: the ANSI 16 colors are softened to match the Warm Slate +
+                // Calm Mint Teal extra-keys design instead of the harsh upstream xterm
+                // primaries (pure #00FF00 green, pure yellow, ...). A user-provided
+                // colors.properties still wins over all of this.
                 props.setProperty("background", "#161920");
                 props.setProperty("foreground", "#EEF2F5");
                 props.setProperty("cursor", "#52C7AC");
+                props.setProperty("color0", "#232834");
+                props.setProperty("color1", "#F0716F");
+                props.setProperty("color2", "#63C98F");
+                props.setProperty("color3", "#E3B86B");
+                props.setProperty("color4", "#6E9BD8");
+                props.setProperty("color5", "#C792D8");
+                props.setProperty("color6", "#5FC4B5");
+                props.setProperty("color7", "#C9D1D9");
+                props.setProperty("color8", "#5B6577");
+                props.setProperty("color9", "#FF9A97");
+                props.setProperty("color10", "#8FE0AE");
+                props.setProperty("color11", "#F2CE8F");
+                props.setProperty("color12", "#94BDF5");
+                props.setProperty("color13", "#DDB0F0");
+                props.setProperty("color14", "#8FE3D5");
+                props.setProperty("color15", "#F5F8FA");
             }
 
             TerminalColors.COLOR_SCHEME.updateWith(props);

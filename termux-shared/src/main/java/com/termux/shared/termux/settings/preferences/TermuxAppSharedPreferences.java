@@ -132,7 +132,10 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         sizes[1] = (int) (4f * dipInPixels); // min
 
         // http://www.google.com/design/spec/style/typography.html#typography-line-height
-        int defaultFontSize = Math.round(12 * dipInPixels);
+        // Termux Baby: default terminal font is 14dp instead of upstream 12dp so
+        // Pro mode output is readable without pinch-zooming first. Only the fresh
+        // default changes; a size the user already chose is kept as-is.
+        int defaultFontSize = Math.round(14 * dipInPixels);
         // Make it divisible by 2 since that is the minimal adjustment step:
         if (defaultFontSize % 2 == 1) defaultFontSize--;
 

@@ -26,6 +26,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
@@ -752,6 +753,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    /**
+     * Termux Baby: in Pro mode the "back to Easy" pill used to float on top of the
+     * terminal output and hide its top-right corner. Reserve a dedicated top strip
+     * for it instead: the TerminalView gets a top margin in Pro mode so it renders
+     * below the pill and no output is ever covered. (Padding the shared container
+     * would not work: the pill is a child of the same container and would be
+     * pushed into the terminal area together with it.)
+     * Strip height = pill height (34dp) + its top margin (4dp) + breathing room.
+     */
+    private void setProReturnPillTopInset(boolean proMode) {
+        if (mTerminalView == null) return;
+        ViewGroup.LayoutParams params = mTerminalView.getLayoutParams();
+        if (!(params instanceof FrameLayout.LayoutParams)) return;
+        FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) params;
+        int topPx = proMode
+            ? (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 42, getResources().getDisplayMetrics())
+            : 0;
+        if (frameParams.topMargin != topPx) {
+            frameParams.topMargin = topPx;
+            mTerminalView.setLayoutParams(frameParams);
+        }
+    }
+
     private void applyModeUi(boolean babyMode, boolean restoreSoftKeyboard) {
         mIsBabyModeActive = babyMode;
         DrawerLayout drawer = getDrawer();
@@ -764,6 +788,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.VISIBLE);
             if (mBabyProReturnPill != null) mBabyProReturnPill.setVisibility(View.GONE);
+            setProReturnPillTopInset(false);
             updateModeSwitcherTabs(true);
 
             if (mBabyModeController != null) {
@@ -783,6 +808,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } else {
             if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.GONE);
             if (mBabyProReturnPill != null) mBabyProReturnPill.setVisibility(View.VISIBLE);
+            setProReturnPillTopInset(true);
             updateModeSwitcherTabs(false);
 
             if (mBabyModeController != null) {

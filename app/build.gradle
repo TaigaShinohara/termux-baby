@@ -1,5 +1,8 @@
 plugins {
     id "com.android.application"
+    // Kotlin Android plugin is applied so the JVM screenshot tests (Roborazzi)
+    // can be written in Kotlin; main sources are Java-only.
+    id "org.jetbrains.kotlin.android"
 }
 
 ext {
@@ -119,6 +122,25 @@ android {
     testOptions {
         unitTests {
             includeAndroidResources = true
+            all {
+                // Pre-delivery UI verification (JVM, no emulator): Robolectric
+                // resolves its android-all runtime from a Maven repo at test time.
+                // ROBOLECTRIC_REPO_URL can point it at a local mirror/offline cache;
+                // default is Maven Central.
+                systemProperty 'robolectric.dependency.repo.id', 'robolectricRepo'
+                systemProperty 'robolectric.dependency.repo.url',
+                    System.getenv('ROBOLECTRIC_REPO_URL') ?: 'https://repo.maven.apache.org/maven2'
+                // Roborazzi record/verify switches (normally set by its Gradle plugin,
+                // which this legacy buildscript build does not apply).
+                systemProperty 'roborazzi.test.record', System.getenv('ROBORAZZI_RECORD') ?: 'false'
+                systemProperty 'roborazzi.test.verify', System.getenv('ROBORAZZI_VERIFY') ?: 'false'
+                systemProperty 'roborazzi.test.compare', System.getenv('ROBORAZZI_COMPARE') ?: 'false'
+                // This VM intercepts IPv6 loopback, which silently kills Gradle
+                // test workers (they connect back to the build over loopback).
+                // Force IPv4 in the test JVM from launch.
+                jvmArgs '-Djava.net.preferIPv4Stack=true'
+                maxHeapSize = '1024m'
+            }
         }
     }
 
@@ -145,9 +167,20 @@ android {
     }
 }
 
+// Kotlin is used for unit tests only; match the app's Java 1.8 target so the
+// Kotlin and Java compile tasks agree on JVM-target compatibility.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+    }
+}
+
 dependencies {
     testImplementation "junit:junit:4.13.2"
-    testImplementation "org.robolectric:robolectric:4.10"
+    // JVM UI verification: Robolectric (transitions/logic) + Roborazzi (screenshots).
+    testImplementation "org.robolectric:robolectric:4.14.1"
+    testImplementation "io.github.takahirom.roborazzi:roborazzi:1.44.0"
+    testImplementation "androidx.test:core:1.6.1"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"
 }
 
