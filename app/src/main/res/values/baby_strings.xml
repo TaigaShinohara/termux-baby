@@ -130,6 +130,16 @@
     <string name="baby_agent_agy_name">Antigravity (agy)</string>
     <string name="baby_agent_agy_desc">Google\'s agent CLI via a Debian room (proot). First setup is the long one.</string>
 
+    <string name="baby_install_confirm_title">Install %1$s?</string>
+    <string name="baby_install_confirm_message">It will be downloaded and installed. This can take a few minutes and uses some data.</string>
+    <string name="baby_install_confirm_cancel">Not now</string>
+
+    <!-- Session bar (now-running strip) -->
+    <string name="baby_session_bar_running">Running</string>
+    <string name="baby_session_bar_done">Done</string>
+    <string name="baby_session_bar_failed">Stopped</string>
+    <string name="baby_session_bar_terminal">Terminal</string>
+
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">Friendly language for learning coding &amp; scripts</string>
     <string name="baby_tool_git_name">Git</string>

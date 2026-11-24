@@ -22,21 +22,35 @@ import com.google.android.material.progressindicator.CircularProgressIndicator;
 import com.termux.R;
 
 /**
- * Calm, beginner-friendly BottomSheetDialog that runs a shell command asynchronously,
- * displays a plain-language summary (or friendly translated error with 1-tap recovery),
- * and keeps raw terminal output tucked inside a collapsed-by-default accordion.
+ * Calm, beginner-friendly BottomSheetDialog that displays a {@link BabyRunSession},
+ * with a plain-language summary (or friendly translated error with 1-tap recovery)
+ * and raw terminal output tucked inside a collapsed-by-default accordion.
+ *
+ * <p>The sheet is only a view: the session owns the execution, so closing this
+ * sheet never kills running work — it continues in the background and can be
+ * re-opened from the session bar. Stopping is the explicit 「とめる」 button.
  */
 public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
-    public interface CompletionListener {
-        void onActionFinished(boolean success);
+    /**
+     * Creates, registers and starts a run session. Implemented by
+     * {@code BabyModeController} so every run is tracked by the registry.
+     */
+    public interface RunSessionHost {
+        @NonNull
+        BabyRunSession startRunSession(
+            @NonNull String title,
+            @DrawableRes int iconResId,
+            @NonNull String command,
+            @NonNull BabyAction.OutputFormat outputFormat,
+            int timeoutSeconds,
+            @Nullable String displayName
+        );
     }
 
-    private final BabyCommandExecutor executor;
+    private final RunSessionHost runSessionHost;
     @Nullable
     private final BabyCommandExecutor.ProTerminalBridge proTerminalBridge;
-    @Nullable
-    private final CompletionListener completionListener;
 
     private final ImageView actionIconView;
     private final TextView titleView;
@@ -55,33 +69,41 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
     private final MaterialButton secondaryButton;
     private final MaterialButton primaryButton;
 
-    @Nullable
-    private BabyCommandExecutor.ExecutionHandle activeHandle;
-    private boolean isRunning = false;
     private boolean detailsExpanded = false;
 
     @Nullable
-    private String currentCommand;
-    @Nullable
-    private String currentTitle;
-    @DrawableRes
-    private int currentIconResId = R.drawable.ic_baby_sparkle;
-    @NonNull
-    private BabyAction.OutputFormat currentFormat = BabyAction.OutputFormat.GENERIC;
-    private int currentTimeoutSeconds = BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS;
-    @Nullable
-    private String currentDisplayName;
+    private BabyRunSession session;
+
+    private final BabyRunSession.Listener sessionListener = new BabyRunSession.Listener() {
+        @Override
+        public void onOutputChanged(@NonNull BabyRunSession changed) {
+            if (changed != session || !isShowing()) return;
+            rawOutputTextView.setText(changed.getOutputText());
+            if (changed.isRunning()
+                && changed.outputFormat == BabyAction.OutputFormat.INSTALL
+                && changed.getLastLine() != null) {
+                summaryTextView.setVisibility(View.VISIBLE);
+                summaryTextView.setText(changed.getLastLine());
+            }
+        }
+
+        @Override
+        public void onStateChanged(@NonNull BabyRunSession changed) {
+            if (changed != session || !isShowing()) return;
+            if (!changed.isRunning() && changed.getResult() != null) {
+                renderResult(changed.getResult());
+            }
+        }
+    };
 
     public BabyCommandRunnerSheet(
         @NonNull Context context,
-        @NonNull BabyCommandExecutor executor,
-        @Nullable BabyCommandExecutor.ProTerminalBridge proTerminalBridge,
-        @Nullable CompletionListener completionListener
+        @NonNull RunSessionHost runSessionHost,
+        @Nullable BabyCommandExecutor.ProTerminalBridge proTerminalBridge
     ) {
         super(context, R.style.ThemeOverlay_TermuxBaby_BottomSheetDialog);
-        this.executor = executor;
+        this.runSessionHost = runSessionHost;
         this.proTerminalBridge = proTerminalBridge;
-        this.completionListener = completionListener;
 
         View root = LayoutInflater.from(context).inflate(R.layout.sheet_baby_runner, null);
         setContentView(root);
@@ -104,10 +126,8 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         secondaryButton = root.findViewById(R.id.runner_secondary_button);
         primaryButton = root.findViewById(R.id.runner_primary_button);
 
-        closeIcon.setOnClickListener(v -> {
-            cancelIfRunning();
-            dismiss();
-        });
+        // Closing the sheet only detaches the view; the session keeps running.
+        closeIcon.setOnClickListener(v -> dismiss());
 
         detailsToggle.setOnClickListener(v -> toggleDetails());
 
@@ -115,39 +135,43 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             openProButton.setVisibility(View.GONE);
         } else {
             openProButton.setOnClickListener(v -> {
-                String cmd = currentCommand;
-                cancelIfRunning();
+                BabyRunSession current = session;
+                String cmd = current != null ? current.command : null;
+                if (current != null && current.isRunning()) {
+                    current.cancel();
+                }
                 dismiss();
                 proTerminalBridge.openInProTerminal(cmd);
             });
         }
 
         secondaryButton.setOnClickListener(v -> {
-            if (currentCommand != null && currentTitle != null) {
+            BabyRunSession current = session;
+            if (current != null) {
                 startExecution(
-                    currentTitle,
-                    currentIconResId,
-                    currentCommand,
-                    currentFormat,
-                    currentTimeoutSeconds,
-                    currentDisplayName
+                    current.title,
+                    current.iconResId,
+                    current.command,
+                    current.outputFormat,
+                    current.timeoutSeconds,
+                    current.displayName
                 );
             }
         });
 
         primaryButton.setOnClickListener(v -> {
-            if (isRunning) {
-                cancelIfRunning();
-            } else {
-                dismiss();
+            BabyRunSession current = session;
+            if (current != null && current.isRunning()) {
+                current.cancel();
             }
+            dismiss();
         });
 
-        setOnDismissListener(dialog -> cancelIfRunning());
+        setOnDismissListener(dialog -> detachSession());
     }
 
     /**
-     * Shows the sheet and immediately starts executing the specified safe shell command.
+     * Starts a brand-new run session through the host and displays it.
      */
     public void startExecution(
         @NonNull String title,
@@ -157,26 +181,16 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         int timeoutSeconds,
         @Nullable String actionDisplayName
     ) {
-        cancelIfRunning();
-
-        this.currentTitle = title;
-        this.currentIconResId = iconResId;
-        this.currentCommand = command;
-        this.currentFormat = outputFormat;
-        this.currentTimeoutSeconds = timeoutSeconds;
-        this.currentDisplayName = actionDisplayName;
-
-        actionIconView.setImageResource(iconResId);
-        titleView.setText(title);
-        commandTextView.setText(command);
-        rawOutputTextView.setText("");
-
-        setDetailsExpanded(false);
-        detailsToggle.setVisibility(View.VISIBLE);
-        recoveryButton.setVisibility(View.GONE);
-        secondaryButton.setVisibility(View.GONE);
-
         if (!BabyActionCatalog.isSafeForAutoRun(command)) {
+            detachSession();
+            actionIconView.setImageResource(iconResId);
+            titleView.setText(title);
+            commandTextView.setText(command);
+            rawOutputTextView.setText("");
+            setDetailsExpanded(false);
+            detailsToggle.setVisibility(View.VISIBLE);
+            recoveryButton.setVisibility(View.GONE);
+            secondaryButton.setVisibility(View.GONE);
             showErrorState(
                 new BabyErrorTranslator.TranslatedError(
                     BabyErrorTranslator.ErrorCategory.UNKNOWN, null, null
@@ -187,43 +201,45 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             return;
         }
 
-        isRunning = true;
-        progressView.setVisibility(View.VISIBLE);
-        statusIconView.setVisibility(View.GONE);
-        statusHeadlineView.setText(R.string.baby_runner_running);
-        statusHeadlineView.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_text_primary));
-        summaryTextView.setText("");
-        summaryTextView.setVisibility(View.GONE);
-        primaryButton.setText(R.string.baby_runner_cancel);
+        BabyRunSession created = runSessionHost.startRunSession(
+            title, iconResId, command, outputFormat, timeoutSeconds, actionDisplayName
+        );
+        bindSession(created);
+    }
+
+    /**
+     * Displays an existing session (live or finished) and shows the sheet.
+     * Used when the user taps a chip on the session bar.
+     */
+    public void bindSession(@NonNull BabyRunSession newSession) {
+        detachSession();
+        this.session = newSession;
+        newSession.addListener(sessionListener);
+
+        actionIconView.setImageResource(newSession.iconResId);
+        titleView.setText(newSession.title);
+        commandTextView.setText(newSession.command);
+        rawOutputTextView.setText(newSession.getOutputText());
+
+        setDetailsExpanded(false);
+        detailsToggle.setVisibility(View.VISIBLE);
+        recoveryButton.setVisibility(View.GONE);
+        secondaryButton.setVisibility(View.GONE);
+
+        if (newSession.isRunning()) {
+            renderRunningState();
+            if (newSession.outputFormat == BabyAction.OutputFormat.INSTALL
+                && newSession.getLastLine() != null) {
+                summaryTextView.setVisibility(View.VISIBLE);
+                summaryTextView.setText(newSession.getLastLine());
+            }
+        } else if (newSession.getResult() != null) {
+            renderResult(newSession.getResult());
+        }
 
         if (!isShowing()) {
             show();
         }
-
-        final StringBuilder liveBuffer = new StringBuilder();
-        activeHandle = executor.executeAsync(command, timeoutSeconds, new BabyCommandExecutor.Callback() {
-            @Override
-            public void onOutputLine(@NonNull String line) {
-                if (!isShowing()) return;
-                if (liveBuffer.length() > 0) {
-                    liveBuffer.append('\n');
-                }
-                liveBuffer.append(line);
-                rawOutputTextView.setText(liveBuffer.toString());
-                if (isRunning && outputFormat == BabyAction.OutputFormat.INSTALL) {
-                    summaryTextView.setVisibility(View.VISIBLE);
-                    summaryTextView.setText(line);
-                }
-            }
-
-            @Override
-            public void onComplete(@NonNull BabyCommandExecutor.ExecutionResult result) {
-                isRunning = false;
-                activeHandle = null;
-                if (!isShowing()) return;
-                renderResult(result);
-            }
-        });
     }
 
     /**
@@ -236,18 +252,13 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         @NonNull String packageName,
         @NonNull String displayToolName
     ) {
-        cancelIfRunning();
+        detachSession();
 
-        this.currentTitle = title;
-        this.currentIconResId = iconResId;
-        this.currentCommand = BabyActionCatalog.buildPackageInstallCommand(packageName);
-        this.currentFormat = BabyAction.OutputFormat.INSTALL;
-        this.currentTimeoutSeconds = BabyCommandExecutor.INSTALL_TIMEOUT_SECONDS;
-        this.currentDisplayName = displayToolName;
+        String promptCommand = BabyActionCatalog.buildPackageInstallCommand(packageName);
 
         actionIconView.setImageResource(iconResId);
         titleView.setText(title);
-        commandTextView.setText(currentCommand);
+        commandTextView.setText(promptCommand);
         rawOutputTextView.setText("");
         setDetailsExpanded(false);
         detailsToggle.setVisibility(View.GONE);
@@ -283,7 +294,21 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         }
     }
 
+    private void renderRunningState() {
+        progressView.setVisibility(View.VISIBLE);
+        statusIconView.setVisibility(View.GONE);
+        statusHeadlineView.setText(R.string.baby_runner_running);
+        statusHeadlineView.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_text_primary));
+        summaryTextView.setText("");
+        summaryTextView.setVisibility(View.GONE);
+        primaryButton.setText(R.string.baby_runner_cancel);
+    }
+
     private void renderResult(@NonNull BabyCommandExecutor.ExecutionResult result) {
+        BabyRunSession current = session;
+        BabyAction.OutputFormat format = current != null ? current.outputFormat : BabyAction.OutputFormat.GENERIC;
+        String displayName = current != null ? current.displayName : null;
+
         String combinedClean = BabyOutputFormatter.stripAnsi(result.getCombinedOutput()).trim();
         if (combinedClean.isEmpty()) {
             rawOutputTextView.setText(R.string.baby_runner_empty_output);
@@ -293,10 +318,10 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
         if (result.isSuccess()) {
             BabyOutputFormatter.ParsedSummary summary = BabyOutputFormatter.parse(
-                currentFormat, result.stdout, result.stderr, result.exitCode
+                format, result.stdout, result.stderr, result.exitCode
             );
             String friendlyText = BabyOutputFormatter.formatForDisplay(
-                getContext(), summary, currentDisplayName
+                getContext(), summary, displayName
             );
 
             progressView.setVisibility(View.GONE);
@@ -316,16 +341,9 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             primaryButton.setText(R.string.baby_runner_close);
 
             performSuccessHaptic();
-            BabyPreferences.setFirstActionCompleted(getContext(), true);
-            if (completionListener != null) {
-                completionListener.onActionFinished(true);
-            }
         } else {
             BabyErrorTranslator.TranslatedError error = BabyErrorTranslator.classify(result);
             showErrorState(error, combinedClean);
-            if (completionListener != null) {
-                completionListener.onActionFinished(false);
-            }
         }
     }
 
@@ -381,6 +399,13 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         primaryButton.setText(R.string.baby_runner_close);
     }
 
+    private void detachSession() {
+        if (session != null) {
+            session.removeListener(sessionListener);
+            session = null;
+        }
+    }
+
     private void toggleDetails() {
         setDetailsExpanded(!detailsExpanded);
     }
@@ -403,14 +428,5 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             ? HapticFeedbackConstants.CONFIRM
             : HapticFeedbackConstants.VIRTUAL_KEY;
         decor.performHapticFeedback(feedback);
-    }
-
-    private void cancelIfRunning() {
-        BabyCommandExecutor.ExecutionHandle handle = this.activeHandle;
-        if (handle != null) {
-            handle.cancel();
-            this.activeHandle = null;
-        }
-        isRunning = false;
     }
 }

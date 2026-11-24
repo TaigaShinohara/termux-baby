@@ -25,7 +25,7 @@ import java.util.List;
  * Manages the 6 one-tap action cards, onboarding recommendation highlight, environment status
  * badge, bottom sheets (Runner, Command Helper, Quick Note, Tool Installer), and Pro Mode handoff.
  */
-public final class BabyModeController {
+public final class BabyModeController implements BabyCommandRunnerSheet.RunSessionHost {
 
     /**
      * Callbacks implemented by {@code TermuxActivity} to coordinate Baby/Pro mode switching.
@@ -41,6 +41,13 @@ public final class BabyModeController {
          * Opens Termux Settings.
          */
         void onOpenSettings();
+
+        /**
+         * The set of tracked run sessions changed (started, output, finished) —
+         * the host refreshes the session bar.
+         */
+        default void onRunSessionsChanged() {
+        }
     }
 
     private static final int[] CARD_VIEW_IDS = new int[]{
@@ -56,6 +63,7 @@ public final class BabyModeController {
     private final View babyHomeRoot;
     private final HostCallbacks hostCallbacks;
     private final BabyCommandExecutor executor;
+    private final BabyRunSessionRegistry runSessionRegistry = new BabyRunSessionRegistry();
     private final List<BabyAction> homeActions;
 
     private final ImageView statusIconView;
@@ -83,6 +91,11 @@ public final class BabyModeController {
         this.findActionButton = babyHomeRoot.findViewById(R.id.baby_home_find_action_button);
 
         this.environmentReady = executor.isBootstrapReady();
+
+        runSessionRegistry.addListener(() -> {
+            handleRunSessionCompletions();
+            hostCallbacks.onRunSessionsChanged();
+        });
 
         findActionButton.setOnClickListener(v -> openCommandHelper());
 
@@ -303,14 +316,61 @@ public final class BabyModeController {
     private BabyCommandRunnerSheet createRunnerSheet() {
         return new BabyCommandRunnerSheet(
             activity,
-            executor,
-            hostCallbacks::onSwitchToProMode,
-            success -> {
-                if (success) {
-                    refreshState();
-                }
-            }
+            this,
+            hostCallbacks::onSwitchToProMode
         );
+    }
+
+    /**
+     * Creates, registers and starts a run session. Called by the runner sheet;
+     * the session keeps running even if the sheet is closed afterwards.
+     */
+    @NonNull
+    @Override
+    public BabyRunSession startRunSession(
+        @NonNull String title,
+        int iconResId,
+        @NonNull String command,
+        @NonNull BabyAction.OutputFormat outputFormat,
+        int timeoutSeconds,
+        @Nullable String displayName
+    ) {
+        BabyRunSession session = runSessionRegistry.create(
+            title, iconResId, command, outputFormat, timeoutSeconds, displayName
+        );
+        session.start(executor);
+        return session;
+    }
+
+    @NonNull
+    public BabyRunSessionRegistry getRunSessionRegistry() {
+        return runSessionRegistry;
+    }
+
+    /**
+     * Re-opens the runner sheet for an existing session (session bar tap).
+     * A finished session counts as seen once presented, so its chip goes away.
+     */
+    public void openRunSession(@NonNull BabyRunSession session) {
+        if (!session.isRunning()) {
+            session.markFinishedSeen();
+            runSessionRegistry.pruneSeenFinished();
+        }
+        dismissActiveSheet();
+        BabyCommandRunnerSheet sheet = createRunnerSheet();
+        activeSheet = sheet;
+        sheet.bindSession(session);
+    }
+
+    private void handleRunSessionCompletions() {
+        for (BabyRunSession session : runSessionRegistry.getSessions()) {
+            if (session.isRunning() || session.isCompletionHandled()) continue;
+            session.markCompletionHandled();
+            if (session.getState() == BabyRunSession.State.SUCCESS) {
+                BabyPreferences.setFirstActionCompleted(activity, true);
+                refreshState();
+            }
+        }
     }
 
     private void bindCards() {

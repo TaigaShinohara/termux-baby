@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -101,10 +102,12 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
                 actionButton.setContentDescription(
                     getContext().getString(R.string.baby_installer_install) + " " + toolName
                 );
-                actionButton.setOnClickListener(v -> {
-                    dismiss();
-                    listener.onInstallTool(tool);
-                });
+                actionButton.setOnClickListener(v ->
+                    confirmInstall(toolName, () -> {
+                        dismiss();
+                        listener.onInstallTool(tool);
+                    })
+                );
             }
 
             toolsContainer.addView(item);
@@ -153,13 +156,30 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
                 actionButton.setContentDescription(
                     getContext().getString(R.string.baby_installer_install) + " " + agentName
                 );
-                actionButton.setOnClickListener(v -> {
-                    dismiss();
-                    listener.onInstallAgent(agent);
-                });
+                actionButton.setOnClickListener(v ->
+                    confirmInstall(agentName, () -> {
+                        dismiss();
+                        listener.onInstallAgent(agent);
+                    })
+                );
             }
 
             agentsContainer.addView(item);
         }
+    }
+
+    /**
+     * Confirmation step before any install starts (user request): installing
+     * downloads data and can take minutes, so a tap on "Install" never starts
+     * work immediately — the user confirms the item first.
+     */
+    private void confirmInstall(@NonNull String itemName, @NonNull Runnable onConfirmed) {
+        Context ctx = getContext();
+        new AlertDialog.Builder(ctx)
+            .setTitle(ctx.getString(R.string.baby_install_confirm_title, itemName))
+            .setMessage(R.string.baby_install_confirm_message)
+            .setNegativeButton(R.string.baby_install_confirm_cancel, null)
+            .setPositiveButton(R.string.baby_installer_install, (dialog, which) -> onConfirmed.run())
+            .show();
     }
 }

@@ -36,6 +36,8 @@ import android.widget.Toast;
 import com.termux.R;
 import com.termux.app.api.file.FileReceiverActivity;
 import com.termux.app.baby.BabyModeController;
+import com.termux.app.baby.BabyRunSession;
+import com.termux.app.baby.BabyShellDefaults;
 import com.termux.app.baby.BabyPreferences;
 import com.termux.app.baby.onboarding.BabyOnboardingActivity;
 import com.termux.app.terminal.TermuxActivityRootView;
@@ -65,6 +67,7 @@ import com.termux.shared.termux.theme.TermuxThemeUtils;
 import com.termux.shared.theme.NightMode;
 import com.termux.shared.view.KeyboardUtils;
 import com.termux.shared.view.ViewUtils;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
 import com.termux.view.TerminalView;
@@ -199,6 +202,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private View mBabyProReturnPill;
     private TextView mBabyModeEasyTab;
     private TextView mBabyModeProTab;
+
+    /** Session bar (now-running strip) views and its light poller. */
+    private View mSessionBar;
+    private android.widget.LinearLayout mSessionBarChips;
+    private String mSessionBarSignature;
+    private final android.os.Handler mSessionBarHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable mSessionBarPoll = new Runnable() {
+        @Override
+        public void run() {
+            refreshSessionBar();
+            mSessionBarHandler.postDelayed(this, 2500);
+        }
+    };
     private boolean mIsBabyModeActive = false;
     private boolean mIsOnboardingInProgress = false;
     private boolean mIsBootstrapSetupRunning = false;
@@ -357,6 +373,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         mIsOnboardingInProgress = false;
 
+        // Session bar: refresh now and keep it fresh while the activity is up.
+        refreshSessionBar();
+        mSessionBarHandler.removeCallbacks(mSessionBarPoll);
+        mSessionBarHandler.postDelayed(mSessionBarPoll, 2500);
+
         // Sync Baby/Pro mode state before terminal view client adjusts soft keyboard
         if (mBabyModeController != null) {
             boolean shouldBeBabyMode = BabyPreferences.isBabyMode(this);
@@ -410,6 +431,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTermuxTerminalViewClient.onStop();
 
         removeTermuxActivityRootViewGlobalLayoutListener();
+
+        mSessionBarHandler.removeCallbacks(mSessionBarPoll);
 
         unregisterTermuxActivityBroadcastReceiver();
         getDrawer().closeDrawers();
@@ -479,6 +502,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         } else {
             ensureHushLoginOnce();
+            BabyShellDefaults.ensureDefaultShellFiles();
             if (mBabyModeController != null) {
                 mBabyModeController.setEnvironmentReady(true);
             }
@@ -716,6 +740,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 public void onOpenSettings() {
                     ActivityUtils.startActivity(TermuxActivity.this, new Intent(TermuxActivity.this, SettingsActivity.class));
                 }
+
+                @Override
+                public void onRunSessionsChanged() {
+                    refreshSessionBar();
+                }
             });
         }
 
@@ -725,9 +754,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mBabyModeProTab != null) {
             mBabyModeProTab.setOnClickListener(v -> switchToProMode(null));
         }
-        if (mBabyProReturnPill != null) {
-            mBabyProReturnPill.setOnClickListener(v -> switchToBabyMode());
+        // The Pro-mode pill is a two-tab switcher (Easy | Terminal): only the
+        // Easy tab is actionable; the Terminal tab is the selected state.
+        View proPillEasyTab = findViewById(R.id.baby_pro_pill_easy_tab);
+        if (proPillEasyTab != null) {
+            proPillEasyTab.setOnClickListener(v -> switchToBabyMode());
         }
+
+        mSessionBar = findViewById(R.id.baby_session_bar);
+        mSessionBarChips = findViewById(R.id.baby_session_bar_chips);
+        refreshSessionBar();
         if (babySettingsButton != null) {
             babySettingsButton.setOnClickListener(v ->
                 ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class))
@@ -735,6 +771,101 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         applyModeUi(BabyPreferences.isBabyMode(this), false);
+    }
+
+    /**
+     * Rebuilds the session bar chips from the two session sources: Baby run
+     * sessions (installs and card actions tracked by the controller registry)
+     * and live terminal sessions from TermuxService. In Pro mode the session
+     * currently on screen is skipped — the bar is for what is running
+     * elsewhere. A cheap signature check avoids rebuilding on every poll.
+     */
+    private void refreshSessionBar() {
+        if (mSessionBar == null || mSessionBarChips == null) return;
+
+        java.util.List<BabyRunSession> runSessions = mBabyModeController != null
+            ? mBabyModeController.getRunSessionRegistry().getSessions()
+            : java.util.Collections.emptyList();
+
+        java.util.List<TerminalSession> terminalSessions = new java.util.ArrayList<>();
+        if (mTermuxService != null) {
+            TerminalSession current = mIsBabyModeActive ? null : getCurrentSession();
+            for (TermuxSession termuxSession : mTermuxService.getTermuxSessions()) {
+                TerminalSession terminalSession = termuxSession.getTerminalSession();
+                if (terminalSession == null || !terminalSession.isRunning()) continue;
+                if (current != null && terminalSession == current) continue;
+                terminalSessions.add(terminalSession);
+            }
+        }
+
+        StringBuilder signature = new StringBuilder();
+        for (BabyRunSession s : runSessions) {
+            signature.append('r').append(s.id).append(':').append(s.getState()).append(';');
+        }
+        for (TerminalSession t : terminalSessions) {
+            signature.append('t').append(System.identityHashCode(t)).append(';');
+        }
+        String newSignature = signature.toString();
+        if (newSignature.equals(mSessionBarSignature)) return;
+        mSessionBarSignature = newSignature;
+
+        mSessionBarChips.removeAllViews();
+        android.view.LayoutInflater inflater = android.view.LayoutInflater.from(this);
+
+        for (BabyRunSession runSession : runSessions) {
+            View chip = inflater.inflate(R.layout.item_baby_session_chip, mSessionBarChips, false);
+            View spinner = chip.findViewById(R.id.chip_spinner);
+            android.widget.ImageView icon = chip.findViewById(R.id.chip_icon);
+            TextView title = chip.findViewById(R.id.chip_title);
+            TextView state = chip.findViewById(R.id.chip_state);
+
+            title.setText(runSession.title);
+            if (runSession.isRunning()) {
+                spinner.setVisibility(View.VISIBLE);
+                icon.setVisibility(View.GONE);
+                state.setText(R.string.baby_session_bar_running);
+            } else {
+                spinner.setVisibility(View.GONE);
+                icon.setVisibility(View.VISIBLE);
+                boolean success = runSession.getState() == BabyRunSession.State.SUCCESS;
+                icon.setImageResource(success ? R.drawable.ic_baby_check : R.drawable.ic_baby_warning);
+                state.setText(success ? R.string.baby_session_bar_done : R.string.baby_session_bar_failed);
+            }
+            chip.setContentDescription(runSession.title + ". " + state.getText());
+            chip.setOnClickListener(v -> {
+                if (mBabyModeController != null) {
+                    mBabyModeController.openRunSession(runSession);
+                }
+            });
+            mSessionBarChips.addView(chip);
+        }
+
+        for (TerminalSession terminalSession : terminalSessions) {
+            View chip = inflater.inflate(R.layout.item_baby_session_chip, mSessionBarChips, false);
+            View spinner = chip.findViewById(R.id.chip_spinner);
+            android.widget.ImageView icon = chip.findViewById(R.id.chip_icon);
+            TextView title = chip.findViewById(R.id.chip_title);
+            TextView state = chip.findViewById(R.id.chip_state);
+
+            String name = terminalSession.mSessionName;
+            title.setText(name != null && !name.trim().isEmpty()
+                ? name
+                : getString(R.string.baby_session_bar_terminal));
+            spinner.setVisibility(View.GONE);
+            icon.setVisibility(View.VISIBLE);
+            icon.setImageResource(R.drawable.ic_baby_terminal);
+            state.setText(R.string.baby_session_bar_running);
+            chip.setContentDescription(title.getText() + ". " + state.getText());
+            chip.setOnClickListener(v -> {
+                if (mTermuxTerminalSessionActivityClient != null) {
+                    mTermuxTerminalSessionActivityClient.setCurrentSession(terminalSession);
+                }
+                switchToProMode(null);
+            });
+            mSessionBarChips.addView(chip);
+        }
+
+        mSessionBar.setVisibility(mSessionBarChips.getChildCount() > 0 ? View.VISIBLE : View.GONE);
     }
 
     public boolean isBabyModeActive() {
@@ -835,6 +966,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mTermuxTerminalViewClient.setSoftKeyboardState(false, false);
             }
         }
+
+        refreshSessionBar();
     }
 
     private void updateModeSwitcherTabs(boolean babyActive) {
@@ -899,6 +1032,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mIsBootstrapSetupRunning = false;
             if (mTermuxService == null) return; // Activity might have been destroyed.
             ensureHushLoginOnce();
+            BabyShellDefaults.ensureDefaultShellFiles();
             if (mBabyModeController != null) {
                 mBabyModeController.setEnvironmentReady(true);
             }

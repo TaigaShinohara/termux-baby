@@ -117,7 +117,9 @@
                     android:scrollbars="vertical"
                     tools:ignore="UnusedAttribute" />
 
-                <!-- 1-tap return pill to Easy Mode (visible only in Pro Terminal Mode) -->
+                <!-- Mode switcher pill (visible only in Pro Terminal Mode). Mirrors the
+                     Easy Mode top-bar switcher: BOTH tabs are always shown so the user
+                     can see where they are and switch back in one tap. -->
                 <LinearLayout
                     android:id="@+id/baby_pro_return_pill"
                     android:layout_width="wrap_content"
@@ -126,30 +128,40 @@
                     android:layout_marginTop="4dp"
                     android:layout_marginEnd="10dp"
                     android:background="@drawable/baby_pill_track"
-                    android:clickable="true"
                     android:contentDescription="@string/baby_mode_switch_cd"
                     android:elevation="2dp"
-                    android:focusable="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="12dp"
+                    android:padding="3dp"
                     android:visibility="gone">
 
-                    <ImageView
-                        android:layout_width="15dp"
-                        android:layout_height="15dp"
-                        android:layout_marginEnd="5dp"
-                        android:importantForAccessibility="no"
-                        android:src="@drawable/ic_baby_cards"
-                        app:tint="@color/baby_primary" />
+                    <TextView
+                        android:id="@+id/baby_pro_pill_easy_tab"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:minWidth="52dp"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:text="@string/baby_mode_easy"
+                        android:textColor="@color/baby_text_secondary"
+                        android:textSize="12sp" />
 
                     <TextView
+                        android:id="@+id/baby_pro_pill_pro_tab"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/baby_pill_selected"
                         android:fontFamily="sans-serif-medium"
-                        android:text="@string/baby_mode_easy"
-                        android:textColor="@color/baby_text_primary"
+                        android:gravity="center"
+                        android:minWidth="52dp"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:text="@string/baby_mode_pro"
+                        android:textColor="@color/baby_on_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -230,6 +242,28 @@
             android:layout_alignParentBottom="true" />
 
     </RelativeLayout>
+
+    <!-- Session bar (Apple Music mini-player style): always visible while a
+         Baby run or a terminal session is alive in the background. One chip per
+         session; tapping a chip jumps back to that session. -->
+    <HorizontalScrollView
+        android:id="@+id/baby_session_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/baby_bg"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/baby_session_bar_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp" />
+    </HorizontalScrollView>
 
     <View
         android:id="@+id/activity_termux_bottom_space_view"
