@@ -20,7 +20,7 @@ public final class BabyPreferences {
     private static final String KEY_FIRST_ACTION_COMPLETED = "first_action_completed";
     private static final String KEY_EXTRA_KEYS_PRESET = "extra_keys_preset";
 
-    /** Extra keys preset: clean 1-row × 6 keys with swipe-up popups (default). */
+    /** Extra keys preset: plain 2-row × 7 control panel — control keys and arrows (default). */
     public static final String EXTRA_KEYS_PRESET_SIMPLE = "simple";
     /** Extra keys preset: 2-row × 6 spacious keys with inverted-T arrows. */
     public static final String EXTRA_KEYS_PRESET_BALANCED = "balanced";

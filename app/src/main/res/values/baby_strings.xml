@@ -178,7 +178,7 @@
     <string name="baby_pref_default_mode_summary_pro">Open directly in the classic terminal</string>
 
     <string name="baby_pref_extra_keys_title">Terminal Extra Keys</string>
-    <string name="baby_pref_extra_keys_simple">Simple (1 row, recommended)</string>
+    <string name="baby_pref_extra_keys_simple">Control panel (2 rows, recommended)</string>
     <string name="baby_pref_extra_keys_balanced">Balanced (2 rows)</string>
     <string name="baby_pref_extra_keys_classic">Classic (14 keys)</string>
 

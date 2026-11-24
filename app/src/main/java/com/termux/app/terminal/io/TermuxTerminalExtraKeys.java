@@ -36,15 +36,19 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     /** 1-tap interrupt key name handled directly by {@link #onTerminalExtraKeyButtonClick}. */
     public static final String KEY_CTRL_C = "CTRL_C";
 
-    /** Simple preset: 1 row × 6 spacious keys with swipe-up popups. */
+    /**
+     * Simple preset (default): plain control panel, 2 rows × 7 keys, one label per key
+     * and no swipe-up popups. Shows exactly the keys a phone keyboard lacks:
+     * control keys (ESC / TAB / CTRL / ALT), navigation keys (HOME / END / PGUP / PGDN),
+     * an inverted-T arrow cluster (UP above LEFT / DOWN / RIGHT), and '-' / '/'.
+     */
     public static final String PRESET_SIMPLE_EXTRA_KEYS =
-        "[[{key: 'TAB', popup: 'ESC'}, {key: 'CTRL_C', display: '^C', popup: 'CTRL'}, " +
-        "{key: 'PASTE', display: 'Paste', popup: 'ALT'}, {key: '/', popup: '-'}, " +
-        "{key: 'UP', popup: 'LEFT'}, {key: 'DOWN', popup: 'RIGHT'}]]";
+        "[['ESC', 'TAB', 'CTRL', 'ALT', 'UP', '-', '/'], " +
+        "['HOME', 'END', 'PGUP', 'LEFT', 'DOWN', 'RIGHT', 'PGDN']]";
 
-    /** Balanced preset: 2 rows × 6 spacious keys with inverted-T arrows. */
+    /** Balanced preset: 2 rows × 6 spacious keys with inverted-T arrows. No popups. */
     public static final String PRESET_BALANCED_EXTRA_KEYS =
-        "[['ESC', 'TAB', {key: 'CTRL_C', display: '^C'}, {key: 'PASTE', display: 'Paste'}, 'UP', {key: '-', popup: '|'}], " +
+        "[['ESC', 'TAB', {key: 'CTRL_C', display: '^C'}, {key: 'PASTE', display: 'Paste'}, 'UP', '-'], " +
         "['CTRL', 'ALT', '/', 'LEFT', 'DOWN', 'RIGHT']]";
 
     /** Returns the Extra Keys JSON specification for the given {@link BabyPreferences} preset. */

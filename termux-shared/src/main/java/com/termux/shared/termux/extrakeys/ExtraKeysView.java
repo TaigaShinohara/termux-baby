@@ -565,11 +565,11 @@ public final class ExtraKeysView extends GridLayout {
                     }
                 }
 
-                String popupHint = buttonInfo.getPopup() != null ? buttonInfo.getPopup().getDisplay() : null;
-                boolean hasPopupHint = popupHint != null && !popupHint.isEmpty();
-                if (button instanceof ExtraKeyMaterialButton) {
-                    ((ExtraKeyMaterialButton) button).setPopupHint(popupHint);
-                }
+                // One label per key: the popup hint overlay is intentionally not drawn.
+                // Drawing the swipe-up popup's label in the button's corner made the
+                // panel hard to read (two overlapping labels per key). Swipe-up and
+                // long-press popups still work; they are just not advertised on the key.
+                boolean hasPopupHint = false;
 
                 button.setText(buttonInfo.getDisplay());
                 button.setAllCaps(mButtonTextAllCaps);

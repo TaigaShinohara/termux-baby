@@ -21,7 +21,7 @@ import static org.junit.Assert.assertNull;
 public class BabyExtraKeysPresetTest {
 
     @Test
-    public void simplePreset_parsesAs1x6WithExpectedKeysAndPopups() throws Exception {
+    public void simplePreset_parsesAs2x7PlainControlPanel() throws Exception {
         String json = TermuxTerminalExtraKeys.getExtraKeysJsonForPreset(BabyPreferences.EXTRA_KEYS_PRESET_SIMPLE);
         ExtraKeysInfo info = new ExtraKeysInfo(
             json,
@@ -30,15 +30,19 @@ public class BabyExtraKeysPresetTest {
         );
 
         ExtraKeyButton[][] matrix = info.getMatrix();
-        assertEquals(1, matrix.length);
-        assertEquals(6, matrix[0].length);
+        assertEquals(2, matrix.length);
+        assertEquals(7, matrix[0].length);
+        assertEquals(7, matrix[1].length);
 
-        assertKeyAndPopup(matrix[0][0], "TAB", null, "ESC");
-        assertKeyAndPopup(matrix[0][1], TermuxTerminalExtraKeys.KEY_CTRL_C, "^C", "CTRL");
-        assertKeyAndPopup(matrix[0][2], "PASTE", "Paste", "ALT");
-        assertKeyAndPopup(matrix[0][3], "/", null, "-");
-        assertKeyAndPopup(matrix[0][4], "UP", null, "LEFT");
-        assertKeyAndPopup(matrix[0][5], "DOWN", null, "RIGHT");
+        // Plain control panel: one label per key, no popups anywhere.
+        // Row 1: ESC, TAB, CTRL, ALT, UP, -, /
+        // Row 2: HOME, END, PGUP, LEFT, DOWN, RIGHT, PGDN (DOWN below UP = inverted-T)
+        String[] row1 = {"ESC", "TAB", "CTRL", "ALT", "UP", "-", "/"};
+        String[] row2 = {"HOME", "END", "PGUP", "LEFT", "DOWN", "RIGHT", "PGDN"};
+        for (int col = 0; col < 7; col++) {
+            assertKeyAndPopup(matrix[0][col], row1[col], null, null);
+            assertKeyAndPopup(matrix[1][col], row2[col], null, null);
+        }
     }
 
     @Test
@@ -55,7 +59,7 @@ public class BabyExtraKeysPresetTest {
         assertEquals(6, matrix[0].length);
         assertEquals(6, matrix[1].length);
 
-        // Row 1: ESC, TAB, CTRL_C, PASTE, UP, {key: '-', popup: '|'}
+        // Row 1: ESC, TAB, CTRL_C, PASTE, UP, -
         assertEquals("ESC", matrix[0][0].getKey());
         assertEquals("TAB", matrix[0][1].getKey());
         assertEquals(TermuxTerminalExtraKeys.KEY_CTRL_C, matrix[0][2].getKey());
@@ -63,7 +67,7 @@ public class BabyExtraKeysPresetTest {
         assertEquals("PASTE", matrix[0][3].getKey());
         assertEquals("Paste", matrix[0][3].getDisplay());
         assertEquals("UP", matrix[0][4].getKey());
-        assertKeyAndPopup(matrix[0][5], "-", null, "|");
+        assertKeyAndPopup(matrix[0][5], "-", null, null);
 
         // Row 2: CTRL, ALT, /, LEFT, DOWN, RIGHT
         assertEquals("CTRL", matrix[1][0].getKey());
@@ -72,6 +76,13 @@ public class BabyExtraKeysPresetTest {
         assertEquals("LEFT", matrix[1][3].getKey());
         assertEquals("DOWN", matrix[1][4].getKey());
         assertEquals("RIGHT", matrix[1][5].getKey());
+
+        // No key in this preset hides a popup key either.
+        for (ExtraKeyButton[] row : matrix) {
+            for (ExtraKeyButton button : row) {
+                assertNull(button.getPopup());
+            }
+        }
     }
 
     @Test
