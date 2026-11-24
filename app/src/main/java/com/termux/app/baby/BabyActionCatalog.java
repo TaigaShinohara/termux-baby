@@ -336,6 +336,127 @@ public final class BabyActionCatalog {
     }
 
     /**
+     * Specification for a CLI AI agent that can be installed with one tap from the
+     * Tool Installer sheet and then launched into the Pro Terminal.
+     *
+     * <p>Install commands run through {@link BabyCommandExecutor} (background, streamed
+     * output, long timeout). Launch commands are interactive TUIs, so they are sent to
+     * the Pro Terminal session instead of the background executor.</p>
+     */
+    public static final class AgentSpec {
+        @NonNull
+        public final String id;
+        @StringRes
+        public final int nameResId;
+        @StringRes
+        public final int descResId;
+        @DrawableRes
+        public final int iconResId;
+        /** Binary (or wrapper script) name in $PREFIX/bin used for the installed check. */
+        @NonNull
+        public final String binaryName;
+        @NonNull
+        public final String installCommand;
+        @NonNull
+        public final String launchCommand;
+
+        public AgentSpec(
+            @NonNull String id,
+            @StringRes int nameResId,
+            @StringRes int descResId,
+            @DrawableRes int iconResId,
+            @NonNull String binaryName,
+            @NonNull String installCommand,
+            @NonNull String launchCommand
+        ) {
+            this.id = id;
+            this.nameResId = nameResId;
+            this.descResId = descResId;
+            this.iconResId = iconResId;
+            this.binaryName = binaryName;
+            this.installCommand = installCommand;
+            this.launchCommand = launchCommand;
+        }
+    }
+
+    public static final String AGENT_OPENCODE = "opencode";
+    public static final String AGENT_CLAUDE = "claude";
+    public static final String AGENT_GEMINI = "gemini";
+    public static final String AGENT_AGY = "agy";
+
+    /** Shared one-time setup for the npm-based agents: Node.js LTS + build tools for native modules. */
+    private static final String NPM_AGENT_SETUP =
+        "pkg install -y nodejs-lts python make clang";
+
+    /**
+     * Install command for Antigravity CLI ({@code agy}). The official agy binary is a
+     * glibc Linux build that cannot run on Termux's bionic libc directly, so this
+     * installs a Debian environment with proot-distro, runs Google's official
+     * installer inside it, and drops an {@code agy} wrapper into $PREFIX/bin that
+     * enters Debian and forwards all arguments.
+     */
+    public static final String AGY_INSTALL_COMMAND =
+        "pkg install -y proot-distro"
+            + " && (proot-distro install debian || true)"
+            + " && proot-distro login debian -- bash -lc \"apt-get update"
+            + " && DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates"
+            + " && curl -fsSL https://antigravity.google/cli/install.sh | bash\""
+            + " && printf '%s\\n' '#!/data/data/com.termux/files/usr/bin/sh'"
+            + " 'exec proot-distro login debian -- /root/.local/bin/agy \"$@\"'"
+            + " > \"$PREFIX/bin/agy\""
+            + " && chmod +x \"$PREFIX/bin/agy\""
+            + " && echo 'Antigravity (agy) is ready. Tap Open to start.'";
+
+    /**
+     * Returns the CLI AI agents offered in the Tool Installer sheet.
+     * Native Termux routes come first; Antigravity (proot) is last.
+     */
+    @NonNull
+    public static List<AgentSpec> getInstallableAgents() {
+        return Collections.unmodifiableList(Arrays.asList(
+            new AgentSpec(
+                AGENT_OPENCODE,
+                R.string.baby_agent_opencode_name,
+                R.string.baby_agent_opencode_desc,
+                R.drawable.ic_baby_terminal,
+                "opencode",
+                // Community-maintained native bionic build for Termux, distributed
+                // through its own apt repository so `pkg upgrade` keeps it current.
+                "curl -fsSL https://hope2333.github.io/repo/install.sh | sh -s -- --install opencode",
+                "opencode"
+            ),
+            new AgentSpec(
+                AGENT_CLAUDE,
+                R.string.baby_agent_claude_name,
+                R.string.baby_agent_claude_desc,
+                R.drawable.ic_baby_sparkle,
+                "claude",
+                NPM_AGENT_SETUP + " ripgrep && npm install -g @anthropic-ai/claude-code",
+                // Prefer the Termux ripgrep package over the bundled glibc binary.
+                "USE_BUILTIN_RIPGREP=0 claude"
+            ),
+            new AgentSpec(
+                AGENT_GEMINI,
+                R.string.baby_agent_gemini_name,
+                R.string.baby_agent_gemini_desc,
+                R.drawable.ic_baby_explore,
+                "gemini",
+                NPM_AGENT_SETUP + " && npm install -g @google/gemini-cli",
+                "gemini"
+            ),
+            new AgentSpec(
+                AGENT_AGY,
+                R.string.baby_agent_agy_name,
+                R.string.baby_agent_agy_desc,
+                R.drawable.ic_baby_cards,
+                "agy",
+                AGY_INSTALL_COMMAND,
+                "agy"
+            )
+        ));
+    }
+
+    /**
      * Returns a short, readable command preview for display in Command Helper cards.
      */
     @NonNull

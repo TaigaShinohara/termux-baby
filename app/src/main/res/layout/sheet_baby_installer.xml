@@ -61,9 +61,36 @@
         android:layout_marginTop="16dp">
 
         <LinearLayout
-            android:id="@+id/installer_tools_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/installer_tools_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="4dp"
+                android:text="@string/baby_installer_agents_header"
+                android:textAppearance="@style/TextAppearance.Baby.Headline" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="@string/baby_installer_agents_subtitle"
+                android:textAppearance="@style/TextAppearance.Baby.BodySecondary" />
+
+            <LinearLayout
+                android:id="@+id/installer_agents_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
     </ScrollView>
 </LinearLayout>

@@ -27,6 +27,8 @@ public final class BabyCommandExecutor {
 
     public static final int DEFAULT_TIMEOUT_SECONDS = 20;
     public static final int INSTALL_TIMEOUT_SECONDS = 180;
+    /** Agent installs (npm global packages, proot distro downloads) can take many minutes. */
+    public static final int AGENT_INSTALL_TIMEOUT_SECONDS = 1800;
     private static final int MAX_OUTPUT_CHARS = 65536;
 
     /**

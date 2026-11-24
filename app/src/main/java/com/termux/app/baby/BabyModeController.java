@@ -188,6 +188,25 @@ public final class BabyModeController {
                         toolName
                     );
                 }
+
+                @Override
+                public void onInstallAgent(@NonNull BabyActionCatalog.AgentSpec agent) {
+                    String agentName = activity.getString(agent.nameResId);
+                    runCommandInSheet(
+                        activity.getString(R.string.baby_installer_install) + " " + agentName,
+                        agent.iconResId,
+                        agent.installCommand,
+                        BabyAction.OutputFormat.INSTALL,
+                        BabyCommandExecutor.AGENT_INSTALL_TIMEOUT_SECONDS,
+                        agentName
+                    );
+                }
+
+                @Override
+                public void onLaunchAgent(@NonNull BabyActionCatalog.AgentSpec agent) {
+                    // Agents are interactive TUIs: run them in the Pro Terminal session.
+                    hostCallbacks.onSwitchToProMode(agent.launchCommand);
+                }
             }
         );
         activeSheet = sheet;

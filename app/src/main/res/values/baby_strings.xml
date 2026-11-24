@@ -117,6 +117,18 @@
     <string name="baby_installer_install">Install</string>
     <string name="baby_installer_installed">Installed</string>
     <string name="baby_installer_try">Try</string>
+    <string name="baby_installer_launch">Open</string>
+    <string name="baby_installer_agents_header">AI Agents</string>
+    <string name="baby_installer_agents_subtitle">Coding agents that run right on this phone. Installing takes a few minutes; signing in is yours to do on first open.</string>
+
+    <string name="baby_agent_opencode_name">opencode</string>
+    <string name="baby_agent_opencode_desc">Open-source coding agent. Community Termux build, installs natively.</string>
+    <string name="baby_agent_claude_name">Claude Code</string>
+    <string name="baby_agent_claude_desc">Anthropic\'s coding agent. Installs with Node.js.</string>
+    <string name="baby_agent_gemini_name">Gemini CLI</string>
+    <string name="baby_agent_gemini_desc">Google\'s Gemini in the terminal. Installs with Node.js.</string>
+    <string name="baby_agent_agy_name">Antigravity (agy)</string>
+    <string name="baby_agent_agy_desc">Google\'s agent CLI via a Debian room (proot). First setup is the long one.</string>
 
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">Friendly language for learning coding &amp; scripts</string>

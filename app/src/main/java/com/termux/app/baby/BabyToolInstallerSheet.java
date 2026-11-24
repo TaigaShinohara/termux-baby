@@ -26,11 +26,16 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
         void onInstallTool(@NonNull BabyActionCatalog.ToolSpec tool);
 
         void onTryTool(@NonNull BabyActionCatalog.ToolSpec tool);
+
+        void onInstallAgent(@NonNull BabyActionCatalog.AgentSpec agent);
+
+        void onLaunchAgent(@NonNull BabyActionCatalog.AgentSpec agent);
     }
 
     private final BabyCommandExecutor executor;
     private final OnToolActionListener listener;
     private final LinearLayout toolsContainer;
+    private final LinearLayout agentsContainer;
 
     public BabyToolInstallerSheet(
         @NonNull Context context,
@@ -46,9 +51,11 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
 
         ImageButton closeButton = root.findViewById(R.id.installer_close_button);
         toolsContainer = root.findViewById(R.id.installer_tools_container);
+        agentsContainer = root.findViewById(R.id.installer_agents_container);
 
         closeButton.setOnClickListener(v -> dismiss());
         populateTools();
+        populateAgents();
     }
 
     public void populateTools() {
@@ -101,6 +108,58 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
             }
 
             toolsContainer.addView(item);
+        }
+    }
+
+    /**
+     * Populates the AI Agents section. Installed agents (binary or wrapper present in
+     * $PREFIX/bin) get an "Open" button that launches them in the Pro Terminal;
+     * the rest get an "Install" button that runs the one-tap setup.
+     */
+    public void populateAgents() {
+        agentsContainer.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        List<BabyActionCatalog.AgentSpec> agents = BabyActionCatalog.getInstallableAgents();
+
+        for (BabyActionCatalog.AgentSpec agent : agents) {
+            View item = inflater.inflate(R.layout.item_baby_installer_tool, agentsContainer, false);
+            ImageView icon = item.findViewById(R.id.tool_icon);
+            TextView name = item.findViewById(R.id.tool_name);
+            TextView desc = item.findViewById(R.id.tool_desc);
+            TextView installedBadge = item.findViewById(R.id.tool_installed_badge);
+            MaterialButton actionButton = item.findViewById(R.id.tool_action_button);
+
+            String agentName = getContext().getString(agent.nameResId);
+
+            icon.setImageResource(agent.iconResId);
+            name.setText(agentName);
+            desc.setText(getContext().getString(agent.descResId));
+
+            boolean installed = executor.isBinaryInstalled(agent.binaryName);
+            actionButton.setVisibility(View.VISIBLE);
+            if (installed) {
+                installedBadge.setVisibility(View.VISIBLE);
+                actionButton.setText(R.string.baby_installer_launch);
+                actionButton.setContentDescription(
+                    getContext().getString(R.string.baby_installer_launch) + " " + agentName
+                );
+                actionButton.setOnClickListener(v -> {
+                    dismiss();
+                    listener.onLaunchAgent(agent);
+                });
+            } else {
+                installedBadge.setVisibility(View.GONE);
+                actionButton.setText(R.string.baby_installer_install);
+                actionButton.setContentDescription(
+                    getContext().getString(R.string.baby_installer_install) + " " + agentName
+                );
+                actionButton.setOnClickListener(v -> {
+                    dismiss();
+                    listener.onInstallAgent(agent);
+                });
+            }
+
+            agentsContainer.addView(item);
         }
     }
 }
