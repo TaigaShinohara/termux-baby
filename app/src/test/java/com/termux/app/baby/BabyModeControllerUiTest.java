@@ -63,16 +63,19 @@ public class BabyModeControllerUiTest {
 
     @Test
     public void statusBadge_showsPreparingUntilEnvironmentReady() {
+        View headerRow = root.findViewById(R.id.baby_home_header_row);
         TextView status = root.findViewById(R.id.baby_home_status_text);
-        // No bootstrap exists in the Robolectric sandbox, so it starts as "preparing".
+        // No bootstrap exists in the Robolectric sandbox, so it starts as
+        // "preparing" with the banner visible.
+        Assert.assertEquals(View.VISIBLE, headerRow.getVisibility());
         Assert.assertEquals(
             activity.getString(R.string.baby_home_status_preparing),
             status.getText().toString());
 
+        // Once ready, the banner leaves the home entirely (redesign: no
+        // permanent greeting/status noise on a shortcut surface).
         controller.setEnvironmentReady(true);
-        Assert.assertEquals(
-            activity.getString(R.string.baby_home_status_ready),
-            status.getText().toString());
+        Assert.assertEquals(View.GONE, headerRow.getVisibility());
     }
 
     @Test

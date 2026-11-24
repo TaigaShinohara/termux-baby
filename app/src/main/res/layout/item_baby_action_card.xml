@@ -65,6 +65,19 @@
             android:maxLines="2"
             android:textAppearance="@style/TextAppearance.Baby.Title" />
 
+        <!-- The real command, always visible: the learning material and,
+             for advanced users, the shortcut's identity. Its emphasis grows
+             with the run count (see BabyModeController.bindCard). -->
+        <TextView
+            android:id="@+id/baby_card_command"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textAppearance="@style/TextAppearance.Baby.Code"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/baby_card_subtitle"
             android:layout_width="match_parent"
@@ -73,5 +86,33 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:textAppearance="@style/TextAppearance.Baby.Caption" />
+
+        <LinearLayout
+            android:id="@+id/baby_card_last_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/baby_card_last_result"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="@style/TextAppearance.Baby.Caption" />
+
+            <ImageButton
+                android:id="@+id/baby_card_rerun"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/baby_card_rerun_cd"
+                android:src="@drawable/ic_baby_rerun"
+                app:tint="@color/baby_primary" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

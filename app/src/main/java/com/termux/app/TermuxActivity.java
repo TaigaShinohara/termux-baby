@@ -221,6 +221,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable
     private String mPendingProCommand;
     private long mPendingProCommandAtMs;
+    private boolean mPendingProCommandExecute = true;
 
     /**
      * A parked Pro command ("Open" tapped before any session existed) is only
@@ -230,6 +231,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final long PENDING_PRO_COMMAND_EXPIRY_MS = 60_000;
     private static final String ARG_PENDING_PRO_COMMAND = "pending_pro_command";
     private static final String ARG_PENDING_PRO_COMMAND_AT = "pending_pro_command_at";
+    private static final String ARG_PENDING_PRO_COMMAND_EXECUTE = "pending_pro_command_execute";
 
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
@@ -261,6 +263,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // original timestamp, so the expiry still applies).
             mPendingProCommand = savedInstanceState.getString(ARG_PENDING_PRO_COMMAND, null);
             mPendingProCommandAtMs = savedInstanceState.getLong(ARG_PENDING_PRO_COMMAND_AT, 0);
+            mPendingProCommandExecute = savedInstanceState.getBoolean(ARG_PENDING_PRO_COMMAND_EXECUTE, true);
         }
 
         // Delete ReportInfo serialized object files from cache older than 14 days
@@ -486,6 +489,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mPendingProCommand != null) {
             savedInstanceState.putString(ARG_PENDING_PRO_COMMAND, mPendingProCommand);
             savedInstanceState.putLong(ARG_PENDING_PRO_COMMAND_AT, mPendingProCommandAtMs);
+            savedInstanceState.putBoolean(ARG_PENDING_PRO_COMMAND_EXECUTE, mPendingProCommandExecute);
         }
     }
 
@@ -753,6 +757,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
 
                 @Override
+                public void onTypeInProMode(@Nullable String commandToType) {
+                    typeCommandInProTerminal(commandToType);
+                }
+
+                @Override
                 public void onOpenSettings() {
                     ActivityUtils.startActivity(TermuxActivity.this, new Intent(TermuxActivity.this, SettingsActivity.class));
                 }
@@ -851,13 +860,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ? mBabyModeController.getRunSessionRegistry().getSessions()
             : java.util.Collections.emptyList();
 
+        // The bar shows in BOTH modes (it is also the terminal tab's session
+        // switcher): every live terminal session gets a chip, including the
+        // one currently on screen in Pro mode, which is marked "showing".
+        final TerminalSession currentSession = mIsBabyModeActive ? null : getCurrentSession();
         java.util.List<TerminalSession> terminalSessions = new java.util.ArrayList<>();
         if (mTermuxService != null) {
-            TerminalSession current = mIsBabyModeActive ? null : getCurrentSession();
             for (TermuxSession termuxSession : mTermuxService.getTermuxSessions()) {
                 TerminalSession terminalSession = termuxSession.getTerminalSession();
                 if (terminalSession == null || !terminalSession.isRunning()) continue;
-                if (current != null && terminalSession == current) continue;
                 terminalSessions.add(terminalSession);
             }
         }
@@ -867,7 +878,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             signature.append('r').append(s.id).append(':').append(s.getState()).append(';');
         }
         for (TerminalSession t : terminalSessions) {
-            signature.append('t').append(System.identityHashCode(t)).append(';');
+            signature.append('t').append(System.identityHashCode(t));
+            if (t == currentSession) signature.append('*');
+            signature.append(';');
         }
         String newSignature = signature.toString();
         if (newSignature.equals(mSessionBarSignature)) return;
@@ -927,9 +940,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             spinner.setVisibility(View.GONE);
             icon.setVisibility(View.VISIBLE);
             icon.setImageResource(R.drawable.ic_baby_terminal);
-            state.setText(R.string.baby_session_bar_running);
+            boolean isCurrent = terminalSession == currentSession;
+            state.setText(isCurrent
+                ? R.string.baby_session_bar_current
+                : R.string.baby_session_bar_running);
             chip.setContentDescription(title.getText() + ". " + state.getText());
             chip.setOnClickListener(v -> {
+                if (isCurrent) return; // Already on screen.
                 clearPendingProCommand();
                 if (mTermuxTerminalSessionActivityClient != null) {
                     mTermuxTerminalSessionActivityClient.setCurrentSession(terminalSession);
@@ -959,6 +976,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyModeUi(false, true);
         if (optionalCommandToRun != null && !optionalCommandToRun.trim().isEmpty()) {
             sendCommandToProTerminal(optionalCommandToRun);
+        }
+    }
+
+    /**
+     * Switches to Pro mode and TYPES the command without running it, so the
+     * user presses Enter themselves (Easy Mode learning loop, final step).
+     */
+    public void typeCommandInProTerminal(@Nullable String commandToType) {
+        BabyPreferences.setBabyMode(this, false);
+        applyModeUi(false, true);
+        if (commandToType != null && !commandToType.trim().isEmpty()) {
+            sendCommandToProTerminal(commandToType, false);
         }
     }
 
@@ -1148,10 +1177,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void sendCommandToProTerminal(@NonNull String command) {
+        sendCommandToProTerminal(command, true);
+    }
+
+    /**
+     * Writes a command into the current Pro session. With {@code execute}
+     * false the command is only TYPED (no newline): the user presses Enter
+     * themselves — the final step of the Easy Mode learning loop.
+     */
+    private void sendCommandToProTerminal(@NonNull String command, boolean execute) {
         TerminalSession session = getCurrentSession();
         if (session != null && session.isRunning()) {
-            String line = command.endsWith("\n") ? command : command + "\n";
-            session.write(line);
+            session.write(execute && !command.endsWith("\n") ? command + "\n" : command);
         } else {
             // No session to receive it yet: park it briefly. It is flushed
             // only by the bootstrap/service-connected paths that create the
@@ -1160,6 +1197,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // unrelated session much later.
             mPendingProCommand = command;
             mPendingProCommandAtMs = System.currentTimeMillis();
+            mPendingProCommandExecute = execute;
         }
     }
 
@@ -1172,9 +1210,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         TerminalSession session = getCurrentSession();
         if (session != null && session.isRunning()) {
             String cmd = mPendingProCommand;
+            boolean execute = mPendingProCommandExecute;
             mPendingProCommand = null;
-            String line = cmd.endsWith("\n") ? cmd : cmd + "\n";
-            session.write(line);
+            session.write(execute && !cmd.endsWith("\n") ? cmd + "\n" : cmd);
         }
     }
 

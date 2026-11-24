@@ -69,6 +69,7 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
             ImageView icon = item.findViewById(R.id.tool_icon);
             TextView name = item.findViewById(R.id.tool_name);
             TextView desc = item.findViewById(R.id.tool_desc);
+            TextView commandView = item.findViewById(R.id.tool_command);
             TextView installedBadge = item.findViewById(R.id.tool_installed_badge);
             MaterialButton actionButton = item.findViewById(R.id.tool_action_button);
 
@@ -78,6 +79,7 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
             icon.setImageResource(tool.iconResId);
             name.setText(toolName);
             desc.setText(toolDesc);
+            commandView.setText(tool.buildInstallCommand());
 
             boolean installed = executor.isBinaryInstalled(tool.binaryName);
             if (installed) {
@@ -129,6 +131,7 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
             ImageView icon = item.findViewById(R.id.tool_icon);
             TextView name = item.findViewById(R.id.tool_name);
             TextView desc = item.findViewById(R.id.tool_desc);
+            TextView commandView = item.findViewById(R.id.tool_command);
             TextView installedBadge = item.findViewById(R.id.tool_installed_badge);
             MaterialButton actionButton = item.findViewById(R.id.tool_action_button);
 
@@ -137,6 +140,7 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
             icon.setImageResource(agent.iconResId);
             name.setText(agentName);
             desc.setText(getContext().getString(agent.descResId));
+            commandView.setText(BabyActionCatalog.truncateForDisplay(agent.installCommand));
 
             boolean installed = executor.isBinaryInstalled(agent.binaryName);
             actionButton.setVisibility(View.VISIBLE);

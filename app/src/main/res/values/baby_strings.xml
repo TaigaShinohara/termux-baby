@@ -10,7 +10,6 @@
     <string name="baby_home_greeting">What shall we do?</string>
     <string name="baby_home_status_ready">Ready</string>
     <string name="baby_home_status_preparing">Getting ready…</string>
-    <string name="baby_home_find_action">Find an action</string>
     <string name="baby_home_find_action_cd">Find an action using plain words</string>
     <string name="baby_home_recommended_badge">Try this first</string>
 
@@ -45,7 +44,7 @@
     <string name="baby_runner_cancel">Stop</string>
     <string name="baby_runner_install_now">Install now</string>
     <string name="baby_runner_empty_output">Finished with no text output.</string>
-    <string name="baby_runner_command_label">Command run:</string>
+    <string name="baby_runner_command_label">Command:</string>
 
     <!-- Output Formatter Friendly Summaries -->
     <string name="baby_summary_files_empty">No files here yet. Try creating a Quick Note!</string>
@@ -68,7 +67,7 @@
     <string name="baby_error_generic">It did not finish as expected. You can try again or check the details below.</string>
 
     <!-- Command Helper Sheet -->
-    <string name="baby_helper_title">Find an action</string>
+    <string name="baby_helper_title">Command catalog</string>
     <string name="baby_helper_search_hint">Type what you want to do…</string>
     <string name="baby_helper_cat_all">All</string>
     <string name="baby_helper_cat_files">Files</string>
@@ -145,6 +144,7 @@
     <string name="baby_session_close_last_message">This is the last session. Closing it will exit the app.</string>
     <string name="baby_session_close_run_message">"%1$s" is still running and will be stopped.</string>
     <string name="baby_session_close_button">Close</string>
+    <string name="baby_session_bar_current">Showing</string>
 
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">Friendly language for learning coding &amp; scripts</string>
@@ -162,8 +162,8 @@
     <string name="baby_onboarding_progress_cd">Step %1$d of %2$d</string>
 
     <!-- Page 1: Hook -->
-    <string name="baby_onboarding_p1_title">A gentle terminal, no commands needed</string>
-    <string name="baby_onboarding_p1_body">Tap everyday cards to get things done with zero stress.</string>
+    <string name="baby_onboarding_p1_title">A terminal that teaches you commands as you tap</string>
+    <string name="baby_onboarding_p1_body">Every card shows its real command. Tap and it runs as-is — and little by little, you learn the commands themselves.</string>
 
     <!-- Page 2: 3-Choice Goal Selector -->
     <string name="baby_onboarding_p2_title">What would you like to try first?</string>
@@ -176,7 +176,7 @@
 
     <!-- Page 3: Match Declaration -->
     <string name="baby_onboarding_p3_title">Termux Baby is made for you</string>
-    <string name="baby_onboarding_match_1">You can install and run Python with a single tap — no commands to memorize.</string>
+    <string name="baby_onboarding_match_1">Commands are never hidden: you see them before you run them, and what each part means.</string>
     <string name="baby_onboarding_match_2">See your files, storage, and network status in plain language right away.</string>
     <string name="baby_onboarding_match_3">Every card is safe to tap, so you can explore at your own pace.</string>
 
@@ -221,4 +221,67 @@
         <item>balanced</item>
         <item>classic</item>
     </string-array>
+
+    <!-- Token meanings: what each part of a command does (learning material) -->
+    <string name="baby_token_ls">List files and folders</string>
+    <string name="baby_token_ls_la">Include hidden files, with details</string>
+    <string name="baby_token_color_never">No colors (the app formats it readably)</string>
+    <string name="baby_token_ping">Call out to check the other side answers</string>
+    <string name="baby_token_ping_c">Only 3 times</string>
+    <string name="baby_token_ping_w">Wait up to 4 seconds for a reply</string>
+    <string name="baby_token_ping_target">Where to test (an address on the internet)</string>
+    <string name="baby_token_uname">Show what kind of machine this is</string>
+    <string name="baby_token_and">If that worked, continue to the next part</string>
+    <string name="baby_token_df">Check free space (in readable units)</string>
+    <string name="baby_token_home">Your home folder</string>
+    <string name="baby_token_pwd">Show where you are now</string>
+    <string name="baby_token_mkdir">Make a folder</string>
+    <string name="baby_token_mkdir_p">Make parents too (fine if it already exists)</string>
+    <string name="baby_token_your_name">A name you type in</string>
+    <string name="baby_token_find">Search from the current place</string>
+    <string name="baby_token_find_depth">Up to 3 levels deep</string>
+    <string name="baby_token_find_iname">Search by name (ignoring upper/lower case)</string>
+    <string name="baby_token_date">Show the current date and time</string>
+    <string name="baby_token_curl">Fetch data from across the network</string>
+    <string name="baby_token_curl_s">Quietly (no progress display)</string>
+    <string name="baby_token_curl_time">Up to 8 seconds at most</string>
+    <string name="baby_token_ifconfig">A place that tells you your public address</string>
+    <string name="baby_token_pkg">The command that manages tools</string>
+    <string name="baby_token_pkg_update">Refresh the list</string>
+    <string name="baby_token_yes">Answer yes to every question</string>
+    <string name="baby_token_python3">Run Python (a programming language)</string>
+    <string name="baby_token_python_c">Run the next text as a program</string>
+    <string name="baby_token_python_expr">The expression to calculate (restricted to safe math)</string>
+    <!-- Easy Mode redesign: home, cards, runner, catalog -->
+    <string name="baby_home_next_title">Next to learn</string>
+    <string name="baby_home_add_custom">Add your own command</string>
+    <string name="baby_home_find_action">Open the command catalog</string>
+    <string name="baby_card_mastered">Learned</string>
+    <string name="baby_card_rerun_cd">Run again</string>
+    <string name="baby_card_menu_type">Type it myself in the terminal</string>
+    <string name="baby_card_menu_up">Move up</string>
+    <string name="baby_card_menu_down">Move down</string>
+    <string name="baby_card_menu_unpin">Remove from home</string>
+    <string name="baby_card_menu_pin">Pin to home</string>
+    <string name="baby_card_menu_delete">Delete</string>
+    <string name="baby_custom_title">Add your own command</string>
+    <string name="baby_custom_label_hint">Name (e.g. Update everything)</string>
+    <string name="baby_custom_command_hint">Command (e.g. pkg upgrade -y)</string>
+    <string name="baby_custom_add">Add</string>
+    <string name="baby_custom_unsafe">This command cannot be added for safety</string>
+    <string name="baby_custom_empty">Please enter a name and a command</string>
+    <string name="baby_runner_tokens_title">What the parts mean (tap one)</string>
+    <string name="baby_runner_type_myself">Type it myself in the terminal</string>
+    <string name="baby_runner_run_in_terminal">Run in terminal</string>
+    <string name="baby_runner_output_title">Result (as shown)</string>
+    <string name="baby_catalog_note">Write a note</string>
+    <string name="baby_catalog_pin">Pin</string>
+    <string name="baby_catalog_unpin">Unpin</string>
+
+    <string name="baby_onboarding_try_title">Try running one, right now</string>
+    <string name="baby_onboarding_try_body">This is a real command. Tap the button and it really runs.</string>
+    <string name="baby_onboarding_try_run">Run it</string>
+    <string name="baby_onboarding_try_running">Running…</string>
+    <string name="baby_onboarding_try_done">That is what running a command means. Home works the same way.</string>
+    <string name="baby_onboarding_try_python_missing">Python is not installed yet. You can add it in one tap from "Install tools" on Home.</string>
 </resources>

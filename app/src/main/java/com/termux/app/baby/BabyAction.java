@@ -40,6 +40,22 @@ public final class BabyAction {
         TOOLS
     }
 
+    /**
+     * One part of a command plus its plain-language meaning — the learning
+     * material shown with the command ("what does this piece do?").
+     */
+    public static final class TokenNote {
+        @NonNull
+        public final String token;
+        @StringRes
+        public final int meaningResId;
+
+        public TokenNote(@NonNull String token, @StringRes int meaningResId) {
+            this.token = token;
+            this.meaningResId = meaningResId;
+        }
+    }
+
     @NonNull
     public final String id;
     @StringRes

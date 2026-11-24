@@ -166,15 +166,112 @@ public final class BabyActionCatalog {
                 R.string.baby_action_python_title,
                 R.string.baby_action_python_sub,
                 R.drawable.ic_baby_python,
-                BabyAction.ActionType.TRY_PYTHON,
+                BabyAction.ActionType.COMMAND_WITH_INPUT,
                 BabyAction.Category.LEARN,
-                PYTHON_HELLO_COMMAND,
+                SAFE_PYTHON_CALC_TEMPLATE,
                 BabyAction.OutputFormat.PYTHON,
-                0,
-                0,
+                R.string.baby_recipe_python_calc_title,
+                R.string.baby_recipe_python_calc_hint,
                 BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS
             )
         ));
+    }
+
+    /**
+     * Learning order for the "next to learn" home slot and the catalog:
+     * place → list → make/find → time → network → device → updates → Python.
+     */
+    @NonNull
+    public static List<String> getCurriculumIds() {
+        return Collections.unmodifiableList(Arrays.asList(
+            "recipe_pwd",
+            ACTION_SEE_FILES,
+            "recipe_mkdir",
+            "recipe_find",
+            "recipe_date",
+            ACTION_CHECK_NETWORK,
+            "recipe_ip",
+            ACTION_DEVICE_INFO,
+            "recipe_update",
+            ACTION_TRY_PYTHON
+        ));
+    }
+
+    /** Finds a home action or helper recipe by id, or null. */
+    @Nullable
+    public static BabyAction findById(@Nullable String id) {
+        if (id == null) return null;
+        for (BabyAction action : getHomeActions()) {
+            if (action.id.equals(id)) return action;
+        }
+        for (BabyAction recipe : getHelperRecipes()) {
+            if (recipe.id.equals(id)) return recipe;
+        }
+        return null;
+    }
+
+    /**
+     * Plain-language breakdown of a command's parts, keyed by action id —
+     * the "what does this piece do?" learning material shown next to every
+     * command. Empty for actions without a fixed command.
+     */
+    @NonNull
+    public static List<BabyAction.TokenNote> getTokenNotes(@NonNull String actionId) {
+        switch (actionId) {
+            case ACTION_SEE_FILES:
+                return Arrays.asList(
+                    new BabyAction.TokenNote("ls", R.string.baby_token_ls),
+                    new BabyAction.TokenNote("-la", R.string.baby_token_ls_la),
+                    new BabyAction.TokenNote("--color=never", R.string.baby_token_color_never));
+            case ACTION_CHECK_NETWORK:
+                return Arrays.asList(
+                    new BabyAction.TokenNote("ping", R.string.baby_token_ping),
+                    new BabyAction.TokenNote("-c 3", R.string.baby_token_ping_c),
+                    new BabyAction.TokenNote("-W 4", R.string.baby_token_ping_w),
+                    new BabyAction.TokenNote("1.1.1.1", R.string.baby_token_ping_target));
+            case ACTION_DEVICE_INFO:
+                return Arrays.asList(
+                    new BabyAction.TokenNote("uname -m", R.string.baby_token_uname),
+                    new BabyAction.TokenNote("&&", R.string.baby_token_and),
+                    new BabyAction.TokenNote("df -h", R.string.baby_token_df),
+                    new BabyAction.TokenNote("\"$HOME\"", R.string.baby_token_home));
+            case ACTION_TRY_PYTHON:
+            case "recipe_python_calc":
+                return Arrays.asList(
+                    new BabyAction.TokenNote("python3", R.string.baby_token_python3),
+                    new BabyAction.TokenNote("-c", R.string.baby_token_python_c),
+                    new BabyAction.TokenNote("'式'", R.string.baby_token_python_expr));
+            case "recipe_pwd":
+                return Collections.singletonList(
+                    new BabyAction.TokenNote("pwd", R.string.baby_token_pwd));
+            case "recipe_mkdir":
+                return Arrays.asList(
+                    new BabyAction.TokenNote("mkdir", R.string.baby_token_mkdir),
+                    new BabyAction.TokenNote("-p", R.string.baby_token_mkdir_p),
+                    new BabyAction.TokenNote("名前", R.string.baby_token_your_name));
+            case "recipe_find":
+                return Arrays.asList(
+                    new BabyAction.TokenNote("find .", R.string.baby_token_find),
+                    new BabyAction.TokenNote("-maxdepth 3", R.string.baby_token_find_depth),
+                    new BabyAction.TokenNote("-iname", R.string.baby_token_find_iname),
+                    new BabyAction.TokenNote("名前", R.string.baby_token_your_name));
+            case "recipe_date":
+                return Collections.singletonList(
+                    new BabyAction.TokenNote("date", R.string.baby_token_date));
+            case "recipe_ip":
+                return Arrays.asList(
+                    new BabyAction.TokenNote("curl", R.string.baby_token_curl),
+                    new BabyAction.TokenNote("-s", R.string.baby_token_curl_s),
+                    new BabyAction.TokenNote("--max-time 8", R.string.baby_token_curl_time),
+                    new BabyAction.TokenNote("ifconfig.me", R.string.baby_token_ifconfig));
+            case "recipe_update":
+                return Arrays.asList(
+                    new BabyAction.TokenNote("pkg", R.string.baby_token_pkg),
+                    new BabyAction.TokenNote("update", R.string.baby_token_pkg_update),
+                    new BabyAction.TokenNote("-y", R.string.baby_token_yes));
+            default:
+                return Collections.emptyList();
+        }
     }
 
     /**
@@ -222,19 +319,7 @@ public final class BabyActionCatalog {
             R.string.baby_recipe_find_hint,
             BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS
         ));
-        recipes.add(new BabyAction(
-            "recipe_disk",
-            R.string.baby_recipe_disk_title,
-            R.string.baby_recipe_disk_sub,
-            R.drawable.ic_baby_device,
-            BabyAction.ActionType.DIRECT_COMMAND,
-            BabyAction.Category.TOOLS,
-            "uname -m && df -h \"$HOME\"",
-            BabyAction.OutputFormat.DEVICE_INFO,
-            0,
-            0,
-            BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS
-        ));
+        // (No recipe_disk: it duplicated the device_info home card exactly.)
         recipes.add(new BabyAction(
             "recipe_date",
             R.string.baby_recipe_date_title,
@@ -461,15 +546,26 @@ public final class BabyActionCatalog {
      */
     @NonNull
     public static String getDisplayCommandPreview(@NonNull BabyAction action) {
-        if ("recipe_python_calc".equals(action.id)) {
-            return "python3 -c 'print(...)'";
-        }
         if (action.commandTemplate == null) {
             return "";
         }
-        return action.commandTemplate
+        // Always the REAL command — a shortened fake preview would teach a
+        // command that does not exist. Long templates are honestly cut with
+        // an ellipsis at a visible boundary.
+        String preview = action.commandTemplate
             .replace(PLACEHOLDER_ARG, "<...>")
             .replace(PLACEHOLDER_GLOB_ARG, "'*...*'");
+        return truncateForDisplay(preview);
+    }
+
+    /** Flattens newlines and honestly truncates a command for one-line display. */
+    @NonNull
+    public static String truncateForDisplay(@NonNull String command) {
+        String flat = command.replace('\n', ' ');
+        if (flat.length() > 64) {
+            return flat.substring(0, 64).trim() + "…";
+        }
+        return flat;
     }
 
     /**

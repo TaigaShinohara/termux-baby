@@ -13,6 +13,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -26,13 +27,23 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * "Find an action" BottomSheetDialog allowing beginners to search plain-language recipes
- * by keyword or category, optionally enter a friendly parameter, and run safely.
+ * The command catalog (formerly "Find an action"): every catalog item —
+ * home actions and recipes in curriculum order — with its REAL command
+ * shown prominently, pinnable to the home grid. This is the full shelf;
+ * the home grid is its pinned subset. The quick note utility lives at the
+ * top (it is not a command, so it is not a home card anymore).
  */
 public final class BabyCommandHelperSheet extends BottomSheetDialog {
 
     public interface OnRecipeSelectedListener {
-        void onRecipeRun(@NonNull BabyAction action, @NonNull String resolvedCommand);
+        /** resolvedCommand is null for sheet-opening actions (installer, note). */
+        void onRecipeRun(@NonNull BabyAction action, @Nullable String resolvedCommand);
+
+        default void onNoteRequested() {
+        }
+
+        default void onPinsChanged() {
+        }
     }
 
     private final List<BabyAction> allRecipes;
@@ -50,7 +61,7 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
     ) {
         super(context, R.style.ThemeOverlay_TermuxBaby_BottomSheetDialog);
         this.listener = listener;
-        this.allRecipes = BabyActionCatalog.getHelperRecipes();
+        this.allRecipes = buildCatalog();
 
         View root = LayoutInflater.from(context).inflate(R.layout.sheet_baby_helper, null);
         setContentView(root);
@@ -63,7 +74,13 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
 
         closeButton.setOnClickListener(v -> dismiss());
 
-        adapter = new RecipeAdapter(this::handleRecipeClick);
+        View noteButton = root.findViewById(R.id.helper_note_button);
+        noteButton.setOnClickListener(v -> {
+            dismiss();
+            listener.onNoteRequested();
+        });
+
+        adapter = new RecipeAdapter(this::handleRecipeClick, listener::onPinsChanged);
         recyclerView.setLayoutManager(new LinearLayoutManager(context));
         recyclerView.setAdapter(adapter);
 
@@ -132,7 +149,31 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
         recyclerView.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
     }
 
+    /** The unified catalog: curriculum order first, then everything else. */
+    @NonNull
+    private static List<BabyAction> buildCatalog() {
+        List<BabyAction> all = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (String id : BabyActionCatalog.getCurriculumIds()) {
+            BabyAction action = BabyActionCatalog.findById(id);
+            if (action != null && seen.add(action.id)) all.add(action);
+        }
+        for (BabyAction action : BabyActionCatalog.getHomeActions()) {
+            if (seen.add(action.id)) all.add(action);
+        }
+        for (BabyAction action : BabyActionCatalog.getHelperRecipes()) {
+            if (seen.add(action.id)) all.add(action);
+        }
+        return all;
+    }
+
     private void handleRecipeClick(@NonNull BabyAction action) {
+        if (action.actionType == BabyAction.ActionType.TOOL_INSTALLER
+            || action.actionType == BabyAction.ActionType.QUICK_NOTE) {
+            dismiss();
+            listener.onRecipeRun(action, null);
+            return;
+        }
         if (action.commandTemplate == null) {
             return;
         }
@@ -186,9 +227,10 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
                         BabyActionCatalog.getDisplayCommandPreview(action)
                     ));
                 } else {
-                    String previewCmd = "recipe_python_calc".equals(action.id)
-                        ? "python3 -c 'print(" + value + ")'"
-                        : BabyActionCatalog.buildSafeCommand(action.commandTemplate, value);
+                    // The REAL resolved command, honestly truncated — never
+                    // an invented shortened form.
+                    String previewCmd = BabyActionCatalog.truncateForDisplay(
+                        BabyActionCatalog.buildSafeCommand(action.commandTemplate, value));
                     previewView.setText(ctx.getString(R.string.baby_helper_command_preview, previewCmd));
                 }
             }
@@ -228,9 +270,11 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
 
         private final List<BabyAction> items = new ArrayList<>();
         private final OnClick onClick;
+        private final Runnable pinsChanged;
 
-        RecipeAdapter(@NonNull OnClick onClick) {
+        RecipeAdapter(@NonNull OnClick onClick, @NonNull Runnable pinsChanged) {
             this.onClick = onClick;
+            this.pinsChanged = pinsChanged;
         }
 
         void submitList(@NonNull List<BabyAction> newItems) {
@@ -259,6 +303,20 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
             holder.commandPreview.setText(BabyActionCatalog.getDisplayCommandPreview(action));
             holder.itemView.setContentDescription(title + ". " + sub);
             holder.itemView.setOnClickListener(v -> onClick.onClick(action));
+
+            boolean pinned = BabyPreferences.getPinnedIds(ctx).contains(action.id);
+            holder.pinButton.setText(pinned ? R.string.baby_catalog_unpin : R.string.baby_catalog_pin);
+            holder.pinButton.setOnClickListener(v -> {
+                List<String> ids = BabyPreferences.getPinnedIds(ctx);
+                if (ids.contains(action.id)) {
+                    ids.remove(action.id);
+                } else {
+                    ids.add(action.id);
+                }
+                BabyPreferences.setPinnedIds(ctx, ids);
+                notifyItemChanged(holder.getAdapterPosition());
+                pinsChanged.run();
+            });
         }
 
         @Override
@@ -272,6 +330,7 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
         final TextView title;
         final TextView subtitle;
         final TextView commandPreview;
+        final TextView pinButton;
 
         RecipeViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -279,6 +338,7 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
             title = itemView.findViewById(R.id.recipe_title);
             subtitle = itemView.findViewById(R.id.recipe_subtitle);
             commandPreview = itemView.findViewById(R.id.recipe_command_preview);
+            pinButton = itemView.findViewById(R.id.recipe_pin_button);
         }
     }
 }

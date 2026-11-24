@@ -61,9 +61,23 @@
                 android:ellipsize="end"
                 android:fontFamily="monospace"
                 android:maxLines="1"
-                android:textColor="@color/baby_text_secondary"
-                android:textSize="11sp" />
+                android:textColor="@color/baby_primary"
+                android:textSize="14sp" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/recipe_pin_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/baby_catalog_pin"
+            android:textColor="@color/baby_primary"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium" />
 
         <ImageView
             android:layout_width="20dp"

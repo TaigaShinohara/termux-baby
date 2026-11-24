@@ -24,13 +24,17 @@
             android:paddingEnd="20dp"
             android:paddingBottom="16dp">
 
-            <!-- Greeting + single-line status badge -->
+            <!-- Preparing banner: shown only while the environment is not
+                 ready yet. Once ready it disappears — a permanent greeting
+                 and badge would be constant noise on a shortcut surface. -->
             <LinearLayout
+                android:id="@+id/baby_home_header_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingBottom="16dp">
+                android:paddingBottom="16dp"
+                android:visibility="gone">
 
                 <TextView
                     android:id="@+id/baby_home_greeting"
@@ -73,91 +77,51 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- 2x3 Action Card Grid -->
+            <!-- Pinned shortcut grid: built dynamically by
+                 BabyModeController (catalog pins + user commands). -->
             <LinearLayout
                 android:id="@+id/baby_action_grid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
+                android:orientation="vertical" />
 
-                <!-- Row 1 -->
-                <LinearLayout
+            <!-- Next-to-learn: the curriculum's next unmastered command. -->
+            <LinearLayout
+                android:id="@+id/baby_next_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:baselineAligned="false"
-                    android:orientation="horizontal">
+                    android:layout_marginBottom="8dp"
+                    android:text="@string/baby_home_next_title"
+                    android:textAppearance="@style/TextAppearance.Baby.Title" />
 
-                    <include
-                        android:id="@+id/baby_card_0"
-                        layout="@layout/item_baby_action_card"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="6dp"
-                        android:layout_weight="1" />
-
-                    <include
-                        android:id="@+id/baby_card_1"
-                        layout="@layout/item_baby_action_card"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1" />
-                </LinearLayout>
-
-                <!-- Row 2 -->
-                <LinearLayout
+                <include
+                    android:id="@+id/baby_next_card"
+                    layout="@layout/item_baby_action_card"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:baselineAligned="false"
-                    android:orientation="horizontal">
-
-                    <include
-                        android:id="@+id/baby_card_2"
-                        layout="@layout/item_baby_action_card"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="6dp"
-                        android:layout_weight="1" />
-
-                    <include
-                        android:id="@+id/baby_card_3"
-                        layout="@layout/item_baby_action_card"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1" />
-                </LinearLayout>
-
-                <!-- Row 3 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:baselineAligned="false"
-                    android:orientation="horizontal">
-
-                    <include
-                        android:id="@+id/baby_card_4"
-                        layout="@layout/item_baby_action_card"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="6dp"
-                        android:layout_weight="1" />
-
-                    <include
-                        android:id="@+id/baby_card_5"
-                        layout="@layout/item_baby_action_card"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1" />
-                </LinearLayout>
+                    android:layout_height="wrap_content" />
             </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/baby_add_custom_button"
+                style="@style/Widget.Baby.SecondaryButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/baby_home_add_custom"
+                app:icon="@drawable/ic_baby_terminal"
+                app:iconGravity="textStart"
+                app:iconPadding="10dp" />
         </LinearLayout>
     </ScrollView>
 
-    <!-- Thumb-zone Primary CTA: Find an action (Command Helper) -->
+    <!-- Thumb-zone Primary CTA: the full command catalog -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

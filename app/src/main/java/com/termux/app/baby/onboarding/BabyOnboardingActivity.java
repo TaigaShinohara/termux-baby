@@ -20,17 +20,17 @@ import androidx.viewpager.widget.ViewPager;
 import com.google.android.material.button.MaterialButton;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.app.baby.BabyAction;
 import com.termux.app.baby.BabyPreferences;
 import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.theme.NightMode;
 
 /**
- * Gentle 7-page first-run onboarding activity for Termux Baby.
- *
- * Follows 1-page-1-claim, 3-choice goal selector with immediate tactile + praise response
- * followed by a 950ms linger before auto-advancing to the dedicated Match Declaration page,
- * 3-step visual how-it-works, 5-dot windowed progress indicator, neutral skip/back navigation,
- * and clean finish into Baby Mode.
+ * 3-page first-run onboarding for Termux Baby: the concept ("commands are
+ * shown, not hidden"), a 3-choice goal selector with immediate tactile +
+ * praise response and a 950ms linger, then a try page where the user runs
+ * one real command before reaching Home. Neutral skip/back navigation,
+ * clean finish into Baby Mode.
  */
 public class BabyOnboardingActivity extends AppCompatActivity
     implements BabyOnboardingPagerAdapter.OnboardingInteractionListener {
@@ -58,6 +58,9 @@ public class BabyOnboardingActivity extends AppCompatActivity
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     @Nullable
     private Runnable mPendingAutoAdvanceRunnable;
+
+    @Nullable
+    private com.termux.app.baby.BabyCommandExecutor mTryExecutor;
 
     private int mCurrentPage = BabyOnboardingPagerAdapter.PAGE_HOOK;
     @NonNull
@@ -192,6 +195,10 @@ public class BabyOnboardingActivity extends AppCompatActivity
     protected void onDestroy() {
         cancelPendingAutoAdvance();
         mMainHandler.removeCallbacksAndMessages(null);
+        if (mTryExecutor != null) {
+            mTryExecutor.shutdown();
+            mTryExecutor = null;
+        }
         super.onDestroy();
     }
 
@@ -214,12 +221,13 @@ public class BabyOnboardingActivity extends AppCompatActivity
         // Cancel any previous timer to prevent double-advance on rapid taps
         cancelPendingAutoAdvance();
 
-        // Linger 950ms so the user reads the specific praise before advancing to Match Declaration
+        // Linger 950ms so the user reads the specific praise before advancing
+        // to the try-it page, where they run their first real command.
         mPendingAutoAdvanceRunnable = () -> {
             mPendingAutoAdvanceRunnable = null;
             if (!isFinishing() && mCurrentPage == BabyOnboardingPagerAdapter.PAGE_CHOICE) {
                 mPager.setCurrentItem(
-                    BabyOnboardingPagerAdapter.PAGE_MATCH,
+                    BabyOnboardingPagerAdapter.PAGE_TRY,
                     BabyPreferences.areAnimationsEnabled(BabyOnboardingActivity.this)
                 );
             }
@@ -232,10 +240,60 @@ public class BabyOnboardingActivity extends AppCompatActivity
         if (mPendingAutoAdvanceRunnable != null && mCurrentPage == BabyOnboardingPagerAdapter.PAGE_CHOICE) {
             cancelPendingAutoAdvance();
             mPager.setCurrentItem(
-                BabyOnboardingPagerAdapter.PAGE_MATCH,
+                BabyOnboardingPagerAdapter.PAGE_TRY,
                 BabyPreferences.areAnimationsEnabled(this)
             );
         }
+    }
+
+    /**
+     * Runs the try page's real command on a background thread and shows the
+     * outcome: friendly summary + the raw output, exactly like the runner
+     * sheet on Home. A success is recorded as the item's first run, so the
+     * home card already carries its first result when the user arrives.
+     */
+    @Override
+    public void onTryRunRequested() {
+        final BabyAction action = mAdapter.getTryAction();
+        final String command = mAdapter.getTryCommand();
+        final boolean pythonGoal = BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal);
+        if (mTryExecutor == null) {
+            mTryExecutor = new com.termux.app.baby.BabyCommandExecutor();
+        }
+        final com.termux.app.baby.BabyCommandExecutor executor = mTryExecutor;
+        executor.executeAsync(command, action.timeoutSeconds,
+            new com.termux.app.baby.BabyCommandExecutor.Callback() {
+                @Override
+                public void onOutputLine(@NonNull String line) {
+                }
+
+                @Override
+                public void onComplete(
+                    @NonNull com.termux.app.baby.BabyCommandExecutor.ExecutionResult result) {
+                    if (isFinishing() || isDestroyed()) return;
+                    String summary;
+                    if (result.isSuccess()) {
+                        com.termux.app.baby.BabyOutputFormatter.ParsedSummary parsed =
+                            com.termux.app.baby.BabyOutputFormatter.parse(
+                                action.outputFormat, result.stdout, result.stderr, result.exitCode);
+                        summary = com.termux.app.baby.BabyOutputFormatter.formatForDisplay(
+                            BabyOnboardingActivity.this, parsed, getString(action.titleResId));
+                        BabyPreferences.incrementRunCount(
+                            BabyOnboardingActivity.this, action.id);
+                        BabyPreferences.setFirstActionCompleted(
+                            BabyOnboardingActivity.this, true);
+                    } else if (pythonGoal) {
+                        // Python simply is not installed yet — that IS the lesson:
+                        // the home installer adds it in one tap.
+                        summary = getString(R.string.baby_onboarding_try_python_missing);
+                    } else {
+                        summary = com.termux.app.baby.BabyErrorTranslator.getFriendlyMessage(
+                            BabyOnboardingActivity.this,
+                            com.termux.app.baby.BabyErrorTranslator.classify(result));
+                    }
+                    mAdapter.showTryResult(summary, result.getCombinedOutput());
+                }
+            });
     }
 
     private void cancelPendingAutoAdvance() {

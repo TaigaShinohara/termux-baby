@@ -3,13 +3,21 @@ package com.termux.app.baby;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.ImageViewCompat;
@@ -18,12 +26,19 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.termux.R;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Main UI controller for Baby Mode Home ({@code view_baby_home.xml}).
- * Manages the 6 one-tap action cards, onboarding recommendation highlight, environment status
- * badge, bottom sheets (Runner, Command Helper, Quick Note, Tool Installer), and Pro Mode handoff.
+ *
+ * <p>Easy Mode's contract (redesign): beginners LEARN commands by using them,
+ * and advanced users get one-tap shortcuts. The home grid is therefore a
+ * pinned set of real commands — catalog actions and user-registered custom
+ * commands — where every card shows its command, cards grow more
+ * command-forward as their run count rises, and the "next to learn" slot
+ * walks the curriculum. Sheets (Runner, Catalog, Quick Note, Tool
+ * Installer) and the Pro handoff hang off this controller.
  */
 public final class BabyModeController implements BabyCommandRunnerSheet.RunSessionHost {
 
@@ -38,6 +53,14 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         void onSwitchToProMode(@Nullable String optionalCommandToRun);
 
         /**
+         * Switches to Pro Terminal mode and TYPES the command without running
+         * it — the user presses Enter themselves.
+         */
+        default void onTypeInProMode(@Nullable String commandToType) {
+            onSwitchToProMode(commandToType);
+        }
+
+        /**
          * Opens Termux Settings.
          */
         void onOpenSettings();
@@ -50,24 +73,34 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         }
     }
 
-    private static final int[] CARD_VIEW_IDS = new int[]{
-        R.id.baby_card_0,
-        R.id.baby_card_1,
-        R.id.baby_card_2,
-        R.id.baby_card_3,
-        R.id.baby_card_4,
-        R.id.baby_card_5
-    };
+    /** Run count at which a card promotes its command to the primary line. */
+    static final int MASTERY_RUN_COUNT = 3;
 
     private final AppCompatActivity activity;
     private final View babyHomeRoot;
     private final HostCallbacks hostCallbacks;
     private final BabyCommandExecutor executor;
     private final BabyRunSessionRegistry runSessionRegistry = new BabyRunSessionRegistry();
-    private final List<BabyAction> homeActions;
 
+    private final BabyCommandExecutor.ProTerminalBridge proTerminalBridge =
+        new BabyCommandExecutor.ProTerminalBridge() {
+            @Override
+            public void openInProTerminal(@Nullable String commandToRun) {
+                hostCallbacks.onSwitchToProMode(commandToRun);
+            }
+
+            @Override
+            public void openInProTerminalToType(@Nullable String commandToType) {
+                hostCallbacks.onTypeInProMode(commandToType);
+            }
+        };
+
+    private final View headerRow;
     private final ImageView statusIconView;
     private final TextView statusTextView;
+    private final LinearLayout gridContainer;
+    private final View nextSection;
+    private final View nextCardRoot;
     private final MaterialButton findActionButton;
 
     @Nullable
@@ -84,10 +117,13 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         this.babyHomeRoot = babyHomeRoot;
         this.hostCallbacks = hostCallbacks;
         this.executor = new BabyCommandExecutor();
-        this.homeActions = BabyActionCatalog.getHomeActions();
 
+        this.headerRow = babyHomeRoot.findViewById(R.id.baby_home_header_row);
         this.statusIconView = babyHomeRoot.findViewById(R.id.baby_home_status_icon);
         this.statusTextView = babyHomeRoot.findViewById(R.id.baby_home_status_text);
+        this.gridContainer = babyHomeRoot.findViewById(R.id.baby_action_grid);
+        this.nextSection = babyHomeRoot.findViewById(R.id.baby_next_section);
+        this.nextCardRoot = babyHomeRoot.findViewById(R.id.baby_next_card);
         this.findActionButton = babyHomeRoot.findViewById(R.id.baby_home_find_action_button);
 
         this.environmentReady = executor.isBootstrapReady();
@@ -98,14 +134,16 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         });
 
         findActionButton.setOnClickListener(v -> openCommandHelper());
+        MaterialButton addCustomButton = babyHomeRoot.findViewById(R.id.baby_add_custom_button);
+        addCustomButton.setOnClickListener(v -> showAddCustomDialog());
 
-        bindCards();
+        buildGrid();
         updateStatusBadge();
     }
 
     /**
-     * Re-binds card highlight state (e.g., after onboarding or completing the first action)
-     * and updates the readiness badge.
+     * Rebuilds the home grid (pins may have changed) and updates the
+     * readiness banner.
      */
     public void refreshState() {
         if (executor.isBootstrapReady()) {
@@ -117,13 +155,13 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
             // every card failing with bootstrap-missing errors.
             this.environmentReady = false;
         }
-        bindCards();
+        buildGrid();
         updateStatusBadge();
     }
 
     /**
-     * Allows {@code TermuxActivity} to update the 1-line status badge while bootstrap is installing
-     * versus ready.
+     * Allows {@code TermuxActivity} to update the preparing banner while
+     * bootstrap is installing versus ready.
      */
     public void setEnvironmentReady(boolean ready) {
         this.environmentReady = ready;
@@ -155,20 +193,44 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
     }
 
     /**
-     * Opens the "Find an action" plain-language Command Helper sheet.
+     * Opens the command catalog (formerly "Find an action"): every catalog
+     * item with its real command, pinnable to the home grid, plus the note
+     * utility.
      */
     public void openCommandHelper() {
         dismissActiveSheet();
         BabyCommandHelperSheet sheet = new BabyCommandHelperSheet(
             activity,
-            (action, resolvedCommand) -> runCommandInSheet(
-                activity.getString(action.titleResId),
-                action.iconResId,
-                resolvedCommand,
-                action.outputFormat,
-                action.timeoutSeconds,
-                activity.getString(action.titleResId)
-            )
+            new BabyCommandHelperSheet.OnRecipeSelectedListener() {
+                @Override
+                public void onRecipeRun(@NonNull BabyAction action, @Nullable String resolvedCommand) {
+                    if (action.actionType == BabyAction.ActionType.TOOL_INSTALLER) {
+                        openToolInstaller();
+                    } else if (action.actionType == BabyAction.ActionType.QUICK_NOTE) {
+                        openQuickNote();
+                    } else if (resolvedCommand != null) {
+                        runCommandInSheet(
+                            activity.getString(action.titleResId),
+                            action.iconResId,
+                            resolvedCommand,
+                            action.outputFormat,
+                            action.timeoutSeconds,
+                            activity.getString(action.titleResId),
+                            action.id
+                        );
+                    }
+                }
+
+                @Override
+                public void onNoteRequested() {
+                    openQuickNote();
+                }
+
+                @Override
+                public void onPinsChanged() {
+                    buildGrid();
+                }
+            }
         );
         activeSheet = sheet;
         sheet.show();
@@ -192,7 +254,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         tool.buildInstallCommand(),
                         BabyAction.OutputFormat.INSTALL,
                         BabyCommandExecutor.INSTALL_TIMEOUT_SECONDS,
-                        toolName
+                        toolName,
+                        "install:" + tool.packageName
                     );
                 }
 
@@ -206,7 +269,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         tool.tryCommand,
                         tool.tryOutputFormat,
                         BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS,
-                        toolName
+                        toolName,
+                        "try:" + tool.packageName
                     );
                 }
 
@@ -219,7 +283,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         agent.installCommand,
                         BabyAction.OutputFormat.INSTALL,
                         BabyCommandExecutor.AGENT_INSTALL_TIMEOUT_SECONDS,
-                        agentName
+                        agentName,
+                        "agent:" + agent.id
                     );
                 }
 
@@ -255,6 +320,9 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
             case QUICK_NOTE:
                 openQuickNote();
                 break;
+            case COMMAND_WITH_INPUT:
+                showInputDialog(action);
+                break;
             case TRY_PYTHON:
                 handleTryPython(action);
                 break;
@@ -267,11 +335,26 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         action.commandTemplate,
                         action.outputFormat,
                         action.timeoutSeconds,
-                        activity.getString(action.titleResId)
+                        activity.getString(action.titleResId),
+                        action.id
                     );
                 }
                 break;
         }
+    }
+
+    /** Runs a user-registered custom shortcut command. */
+    public void runCustomCommand(@NonNull BabyCustomCommand custom) {
+        if (!BabyActionCatalog.isSafeForAutoRun(custom.command)) return;
+        runCommandInSheet(
+            custom.label,
+            R.drawable.ic_baby_terminal,
+            custom.command,
+            BabyAction.OutputFormat.GENERIC,
+            BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS,
+            custom.label,
+            custom.id
+        );
     }
 
     /**
@@ -290,7 +373,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                 BabyActionCatalog.PYTHON_HELLO_COMMAND,
                 BabyAction.OutputFormat.PYTHON,
                 action.timeoutSeconds,
-                activity.getString(R.string.baby_tool_python_name)
+                activity.getString(R.string.baby_tool_python_name),
+                action.id
             );
         } else {
             dismissActiveSheet();
@@ -306,27 +390,110 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         }
     }
 
+    /**
+     * Input prompt for COMMAND_WITH_INPUT actions (folder name, search word,
+     * an expression): shows the REAL resolved command live as the user types
+     * — no fake shortened previews.
+     */
+    private void showInputDialog(@NonNull BabyAction action) {
+        if (action.commandTemplate == null) return;
+        Context ctx = activity;
+        int pad = Math.round(20 * ctx.getResources().getDisplayMetrics().density);
+        int topPad = Math.round(12 * ctx.getResources().getDisplayMetrics().density);
+
+        LinearLayout container = new LinearLayout(ctx);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(pad, topPad, pad, 0);
+
+        EditText input = new EditText(ctx);
+        input.setSingleLine(true);
+        if (action.inputHintResId != 0) {
+            input.setHint(action.inputHintResId);
+        }
+        input.setBackgroundResource(R.drawable.baby_input_bg);
+        int innerPad = Math.round(12 * ctx.getResources().getDisplayMetrics().density);
+        input.setPadding(innerPad, innerPad, innerPad, innerPad);
+        container.addView(input);
+
+        TextView previewView = new TextView(ctx);
+        previewView.setPadding(0, topPad, 0, 0);
+        previewView.setTextAppearance(ctx, R.style.TextAppearance_Baby_Code);
+        previewView.setText(ctx.getString(
+            R.string.baby_helper_command_preview,
+            BabyActionCatalog.getDisplayCommandPreview(action)
+        ));
+        container.addView(previewView);
+
+        input.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String value = s != null ? s.toString().trim() : "";
+                String preview = value.isEmpty()
+                    ? BabyActionCatalog.getDisplayCommandPreview(action)
+                    : BabyActionCatalog.truncateForDisplay(
+                        BabyActionCatalog.buildSafeCommand(action.commandTemplate, value));
+                previewView.setText(ctx.getString(R.string.baby_helper_command_preview, preview));
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(ctx)
+            .setTitle(action.inputLabelResId != 0 ? action.inputLabelResId : action.titleResId)
+            .setView(container)
+            .setNegativeButton(R.string.baby_helper_input_cancel, null)
+            .setPositiveButton(R.string.baby_helper_run, null)
+            .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(v -> {
+                String value = input.getText() != null ? input.getText().toString().trim() : "";
+                if (value.isEmpty()) {
+                    input.setError(ctx.getString(action.inputHintResId != 0
+                        ? action.inputHintResId : R.string.baby_note_empty_error));
+                    return;
+                }
+                String resolved = BabyActionCatalog.buildSafeCommand(action.commandTemplate, value);
+                dialog.dismiss();
+                runCommandInSheet(
+                    activity.getString(action.titleResId),
+                    action.iconResId,
+                    resolved,
+                    action.outputFormat,
+                    action.timeoutSeconds,
+                    activity.getString(action.titleResId),
+                    action.id
+                );
+            }));
+
+        dialog.show();
+    }
+
     private void runCommandInSheet(
         @NonNull String title,
         int iconResId,
         @NonNull String command,
         @NonNull BabyAction.OutputFormat outputFormat,
         int timeoutSeconds,
-        @Nullable String displayName
+        @Nullable String displayName,
+        @Nullable String sourceId
     ) {
         dismissActiveSheet();
         BabyCommandRunnerSheet sheet = createRunnerSheet();
         activeSheet = sheet;
-        sheet.startExecution(title, iconResId, command, outputFormat, timeoutSeconds, displayName);
+        sheet.startExecution(title, iconResId, command, outputFormat, timeoutSeconds,
+            displayName, sourceId);
     }
 
     @NonNull
     private BabyCommandRunnerSheet createRunnerSheet() {
-        return new BabyCommandRunnerSheet(
-            activity,
-            this,
-            hostCallbacks::onSwitchToProMode
-        );
+        return new BabyCommandRunnerSheet(activity, this, proTerminalBridge);
     }
 
     /**
@@ -341,10 +508,11 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         @NonNull String command,
         @NonNull BabyAction.OutputFormat outputFormat,
         int timeoutSeconds,
-        @Nullable String displayName
+        @Nullable String displayName,
+        @Nullable String sourceId
     ) {
         BabyRunSession session = runSessionRegistry.create(
-            title, iconResId, command, outputFormat, timeoutSeconds, displayName
+            title, iconResId, command, outputFormat, timeoutSeconds, displayName, sourceId
         );
         session.start(executor);
         return session;
@@ -381,81 +549,428 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         runSessionRegistry.remove(session);
     }
 
+    /**
+     * Records learning progress for finished runs: run counts drive the
+     * cards' mastery fade, and the one-line last result is shown on the card
+     * with an instant re-run button.
+     */
     private void handleRunSessionCompletions() {
+        boolean gridDirty = false;
         for (BabyRunSession session : runSessionRegistry.getSessions()) {
             if (session.isRunning() || session.isCompletionHandled()) continue;
             session.markCompletionHandled();
-            if (session.getState() == BabyRunSession.State.SUCCESS) {
+            boolean success = session.getState() == BabyRunSession.State.SUCCESS;
+            if (success) {
                 BabyPreferences.setFirstActionCompleted(activity, true);
-                refreshState();
             }
+            if (session.sourceId != null && session.getResult() != null) {
+                BabyPreferences.incrementRunCount(activity, session.sourceId);
+                BabyPreferences.setLastResult(
+                    activity, session.sourceId, success, summarizeSession(session));
+                gridDirty = true;
+            }
+        }
+        if (gridDirty) {
+            buildGrid();
         }
     }
 
-    private void bindCards() {
-        String recommendedId = BabyPreferences.getRecommendedActionId(activity);
-        float density = activity.getResources().getDisplayMetrics().density;
-        int strokeNormal = Math.max(1, Math.round(1 * density));
-        int strokeHighlighted = Math.max(2, Math.round(2 * density));
+    @Nullable
+    private String summarizeSession(@NonNull BabyRunSession session) {
+        BabyCommandExecutor.ExecutionResult result = session.getResult();
+        if (result == null) return null;
+        String text;
+        if (result.isSuccess()) {
+            BabyOutputFormatter.ParsedSummary summary = BabyOutputFormatter.parse(
+                session.outputFormat, result.stdout, result.stderr, result.exitCode);
+            text = BabyOutputFormatter.formatForDisplay(activity, summary, session.displayName);
+        } else {
+            text = BabyErrorTranslator.getFriendlyMessage(
+                activity, BabyErrorTranslator.classify(result));
+        }
+        if (text == null) return null;
+        int newline = text.indexOf('\n');
+        if (newline >= 0) text = text.substring(0, newline);
+        text = text.trim();
+        if (text.length() > 42) text = text.substring(0, 42).trim() + "…";
+        return text.isEmpty() ? null : text;
+    }
 
-        int colorSurface = ContextCompat.getColor(activity, R.color.baby_surface);
-        int colorPrimaryContainer = ContextCompat.getColor(activity, R.color.baby_primary_container);
-        int colorBorder = ContextCompat.getColor(activity, R.color.baby_border);
-        int colorPrimary = ContextCompat.getColor(activity, R.color.baby_primary);
+    // --- Home grid ---
 
-        int count = Math.min(homeActions.size(), CARD_VIEW_IDS.length);
-        for (int i = 0; i < count; i++) {
-            final BabyAction action = homeActions.get(i);
-            View cardRoot = babyHomeRoot.findViewById(CARD_VIEW_IDS[i]);
-            if (!(cardRoot instanceof MaterialCardView)) {
+    /** One resolved grid entry: either a catalog action or a custom command. */
+    private static final class GridItem {
+        @NonNull final String id;
+        @Nullable final BabyAction action;
+        @Nullable final BabyCustomCommand custom;
+
+        GridItem(@NonNull BabyAction action) {
+            this.id = action.id;
+            this.action = action;
+            this.custom = null;
+        }
+
+        GridItem(@NonNull BabyCustomCommand custom) {
+            this.id = custom.id;
+            this.action = null;
+            this.custom = custom;
+        }
+    }
+
+    @NonNull
+    private List<GridItem> resolvePinnedItems() {
+        List<GridItem> items = new ArrayList<>();
+        for (String id : BabyPreferences.getPinnedIds(activity)) {
+            BabyAction action = BabyActionCatalog.findById(id);
+            if (action != null) {
+                items.add(new GridItem(action));
                 continue;
             }
-            MaterialCardView card = (MaterialCardView) cardRoot;
+            BabyCustomCommand custom = BabyPreferences.findCustomCommand(activity, id);
+            if (custom != null) {
+                items.add(new GridItem(custom));
+            }
+        }
+        return items;
+    }
 
-            ImageView iconView = card.findViewById(R.id.baby_card_icon);
-            TextView titleView = card.findViewById(R.id.baby_card_title);
-            TextView subtitleView = card.findViewById(R.id.baby_card_subtitle);
-            TextView badgeView = card.findViewById(R.id.baby_card_recommended_badge);
+    private void buildGrid() {
+        gridContainer.removeAllViews();
+        List<GridItem> items = resolvePinnedItems();
+        float density = activity.getResources().getDisplayMetrics().density;
+        LayoutInflater inflater = LayoutInflater.from(activity);
 
-            String title = activity.getString(action.titleResId);
-            String subtitle = activity.getString(action.subtitleResId);
+        for (int rowStart = 0; rowStart < items.size(); rowStart += 2) {
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setBaselineAligned(false);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (rowStart > 0) rowParams.topMargin = Math.round(12 * density);
+            row.setLayoutParams(rowParams);
 
-            iconView.setImageResource(action.iconResId);
-            titleView.setText(title);
-            subtitleView.setText(subtitle);
+            for (int col = 0; col < 2; col++) {
+                int index = rowStart + col;
+                if (index >= items.size()) {
+                    // Keep the surviving card at half width on an odd row.
+                    View spacer = new View(activity);
+                    spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                    row.addView(spacer);
+                    break;
+                }
+                GridItem item = items.get(index);
+                View cardView = inflater.inflate(R.layout.item_baby_action_card, row, false);
+                LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                if (col == 0) {
+                    cardParams.setMarginEnd(Math.round(6 * density));
+                } else {
+                    cardParams.setMarginStart(Math.round(6 * density));
+                }
+                cardView.setLayoutParams(cardParams);
+                bindCard(cardView, item, index, items.size());
+                row.addView(cardView);
+            }
+            gridContainer.addView(row);
+        }
 
-            boolean isRecommended = action.id.equals(recommendedId);
-            badgeView.setVisibility(isRecommended ? View.VISIBLE : View.GONE);
-            card.setCardBackgroundColor(isRecommended ? colorPrimaryContainer : colorSurface);
-            card.setStrokeColor(isRecommended ? colorPrimary : colorBorder);
-            card.setStrokeWidth(isRecommended ? strokeHighlighted : strokeNormal);
+        bindNextCard(items);
+    }
 
-            String a11y = isRecommended
-                ? title + ". " + subtitle + ". " + activity.getString(R.string.baby_home_recommended_badge)
-                : title + ". " + subtitle;
-            card.setContentDescription(a11y);
+    /**
+     * Binds one card. The emphasis is the lesson: at first the Japanese
+     * title leads and the command supports it; after
+     * {@link #MASTERY_RUN_COUNT} runs the command takes the lead, the
+     * Japanese shrinks to a caption, and a learned badge appears.
+     */
+    private void bindCard(@NonNull View cardRoot, @NonNull GridItem item, int index, int total) {
+        if (!(cardRoot instanceof MaterialCardView)) return;
+        MaterialCardView card = (MaterialCardView) cardRoot;
 
-            card.setOnClickListener(v -> {
-                animateCardPressIfEnabled(card);
-                runAction(action);
+        ImageView iconView = card.findViewById(R.id.baby_card_icon);
+        TextView titleView = card.findViewById(R.id.baby_card_title);
+        TextView commandView = card.findViewById(R.id.baby_card_command);
+        TextView subtitleView = card.findViewById(R.id.baby_card_subtitle);
+        TextView badgeView = card.findViewById(R.id.baby_card_recommended_badge);
+        View lastRow = card.findViewById(R.id.baby_card_last_row);
+        TextView lastResultView = card.findViewById(R.id.baby_card_last_result);
+        ImageButton rerunButton = card.findViewById(R.id.baby_card_rerun);
+
+        String title;
+        String subtitle;
+        String command;
+        int iconResId;
+        boolean directRunnable;
+        if (item.action != null) {
+            title = activity.getString(item.action.titleResId);
+            subtitle = activity.getString(item.action.subtitleResId);
+            command = item.action.commandTemplate != null
+                ? BabyActionCatalog.getDisplayCommandPreview(item.action) : null;
+            iconResId = item.action.iconResId;
+            directRunnable = item.action.actionType == BabyAction.ActionType.DIRECT_COMMAND;
+        } else {
+            title = item.custom.label;
+            subtitle = "";
+            command = item.custom.command;
+            iconResId = R.drawable.ic_baby_terminal;
+            directRunnable = true;
+        }
+
+        int runCount = BabyPreferences.getRunCount(activity, item.id);
+        boolean mastered = command != null && runCount >= MASTERY_RUN_COUNT;
+
+        iconView.setImageResource(iconResId);
+        titleView.setText(title);
+        subtitleView.setText(subtitle);
+        subtitleView.setVisibility(subtitle.isEmpty() ? View.GONE : View.VISIBLE);
+
+        if (command != null) {
+            commandView.setVisibility(View.VISIBLE);
+            commandView.setText(command);
+            if (mastered) {
+                commandView.setTextSize(15);
+                commandView.setTextColor(
+                    ContextCompat.getColor(activity, R.color.baby_text_primary));
+                titleView.setTextSize(13);
+            } else if (runCount >= 1) {
+                commandView.setTextSize(13);
+                commandView.setTextColor(
+                    ContextCompat.getColor(activity, R.color.baby_primary));
+                titleView.setTextSize(16);
+            } else {
+                commandView.setTextSize(12);
+                commandView.setTextColor(
+                    ContextCompat.getColor(activity, R.color.baby_text_secondary));
+                titleView.setTextSize(16);
+            }
+        } else {
+            commandView.setVisibility(View.GONE);
+            titleView.setTextSize(16);
+        }
+
+        boolean isNextToLearn = item.action != null
+            && item.id.equals(findNextToLearnId());
+        if (mastered) {
+            badgeView.setText(R.string.baby_card_mastered);
+            badgeView.setVisibility(View.VISIBLE);
+        } else if (isNextToLearn) {
+            badgeView.setText(R.string.baby_home_next_title);
+            badgeView.setVisibility(View.VISIBLE);
+        } else {
+            badgeView.setVisibility(View.GONE);
+        }
+
+        String lastSummary = BabyPreferences.getLastResultSummary(activity, item.id);
+        if (lastSummary != null) {
+            lastRow.setVisibility(View.VISIBLE);
+            boolean ok = BabyPreferences.getLastResultOk(activity, item.id);
+            lastResultView.setText((ok ? "✓ " : "✗ ") + lastSummary);
+            rerunButton.setVisibility(directRunnable ? View.VISIBLE : View.GONE);
+            rerunButton.setOnClickListener(v -> runGridItem(item));
+        } else {
+            lastRow.setVisibility(View.GONE);
+        }
+
+        card.setContentDescription(title + (command != null ? ". " + command : "")
+            + (subtitle.isEmpty() ? "" : ". " + subtitle));
+        card.setOnClickListener(v -> {
+            animateCardPressIfEnabled(card);
+            runGridItem(item);
+        });
+        card.setOnLongClickListener(v -> {
+            showCardMenu(item, index, total);
+            return true;
+        });
+    }
+
+    private void runGridItem(@NonNull GridItem item) {
+        if (item.action != null) {
+            runAction(item.action);
+        } else if (item.custom != null) {
+            runCustomCommand(item.custom);
+        }
+    }
+
+    /**
+     * The curriculum's next unmastered item: the onboarding goal's
+     * recommendation goes first while it is unlearned, then plain
+     * curriculum order.
+     */
+    @Nullable
+    private String findNextToLearnId() {
+        String recommended = BabyPreferences.getRecommendedActionId(activity);
+        if (recommended != null
+            && BabyPreferences.getRunCount(activity, recommended) < MASTERY_RUN_COUNT) {
+            return recommended;
+        }
+        for (String id : BabyActionCatalog.getCurriculumIds()) {
+            if (BabyPreferences.getRunCount(activity, id) < MASTERY_RUN_COUNT) {
+                return id;
+            }
+        }
+        return null;
+    }
+
+    private void bindNextCard(@NonNull List<GridItem> pinnedItems) {
+        String nextId = findNextToLearnId();
+        BabyAction next = nextId != null ? BabyActionCatalog.findById(nextId) : null;
+        if (next == null) {
+            nextSection.setVisibility(View.GONE);
+            return;
+        }
+        // If the next item is already on the grid, its badge says so instead.
+        for (GridItem item : pinnedItems) {
+            if (item.id.equals(nextId)) {
+                nextSection.setVisibility(View.GONE);
+                return;
+            }
+        }
+        nextSection.setVisibility(View.VISIBLE);
+        bindCard(nextCardRoot, new GridItem(next), -1, -1);
+    }
+
+    private void showCardMenu(@NonNull GridItem item, int index, int total) {
+        List<String> labels = new ArrayList<>();
+        List<Runnable> actions = new ArrayList<>();
+
+        String typeableCommand = null;
+        if (item.action != null
+            && item.action.actionType == BabyAction.ActionType.DIRECT_COMMAND) {
+            typeableCommand = item.action.commandTemplate;
+        } else if (item.custom != null) {
+            typeableCommand = item.custom.command;
+        }
+        if (typeableCommand != null) {
+            final String cmd = typeableCommand;
+            labels.add(activity.getString(R.string.baby_card_menu_type));
+            actions.add(() -> hostCallbacks.onTypeInProMode(cmd));
+        }
+        if (index > 0) {
+            labels.add(activity.getString(R.string.baby_card_menu_up));
+            actions.add(() -> movePinned(item.id, -1));
+        }
+        if (index >= 0 && index < total - 1) {
+            labels.add(activity.getString(R.string.baby_card_menu_down));
+            actions.add(() -> movePinned(item.id, 1));
+        }
+        if (index >= 0) {
+            labels.add(activity.getString(R.string.baby_card_menu_unpin));
+            actions.add(() -> {
+                List<String> ids = BabyPreferences.getPinnedIds(activity);
+                ids.remove(item.id);
+                BabyPreferences.setPinnedIds(activity, ids);
+                buildGrid();
             });
         }
+        if (item.custom != null) {
+            labels.add(activity.getString(R.string.baby_card_menu_delete));
+            actions.add(() -> {
+                List<BabyCustomCommand> customs = BabyPreferences.getCustomCommands(activity);
+                customs.removeIf(c -> c.id.equals(item.custom.id));
+                BabyPreferences.setCustomCommands(activity, customs);
+                List<String> ids = BabyPreferences.getPinnedIds(activity);
+                ids.remove(item.id);
+                BabyPreferences.setPinnedIds(activity, ids);
+                buildGrid();
+            });
+        }
+        if (labels.isEmpty()) return;
+
+        String title = item.action != null
+            ? activity.getString(item.action.titleResId) : item.custom.label;
+        new AlertDialog.Builder(activity)
+            .setTitle(title)
+            .setItems(labels.toArray(new CharSequence[0]),
+                (dialog, which) -> actions.get(which).run())
+            .show();
+    }
+
+    private void movePinned(@NonNull String id, int delta) {
+        List<String> ids = BabyPreferences.getPinnedIds(activity);
+        int from = ids.indexOf(id);
+        int to = from + delta;
+        if (from < 0 || to < 0 || to >= ids.size()) return;
+        ids.remove(from);
+        ids.add(to, id);
+        BabyPreferences.setPinnedIds(activity, ids);
+        buildGrid();
+    }
+
+    private void showAddCustomDialog() {
+        Context ctx = activity;
+        int pad = Math.round(20 * ctx.getResources().getDisplayMetrics().density);
+        int topPad = Math.round(12 * ctx.getResources().getDisplayMetrics().density);
+
+        LinearLayout container = new LinearLayout(ctx);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(pad, topPad, pad, 0);
+
+        EditText labelInput = new EditText(ctx);
+        labelInput.setSingleLine(true);
+        labelInput.setHint(R.string.baby_custom_label_hint);
+        labelInput.setBackgroundResource(R.drawable.baby_input_bg);
+        int innerPad = Math.round(12 * ctx.getResources().getDisplayMetrics().density);
+        labelInput.setPadding(innerPad, innerPad, innerPad, innerPad);
+        container.addView(labelInput);
+
+        EditText commandInput = new EditText(ctx);
+        commandInput.setSingleLine(true);
+        commandInput.setHint(R.string.baby_custom_command_hint);
+        commandInput.setBackgroundResource(R.drawable.baby_input_bg);
+        commandInput.setPadding(innerPad, innerPad, innerPad, innerPad);
+        LinearLayout.LayoutParams commandParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        commandParams.topMargin = topPad;
+        commandInput.setLayoutParams(commandParams);
+        container.addView(commandInput);
+
+        AlertDialog dialog = new AlertDialog.Builder(ctx)
+            .setTitle(R.string.baby_custom_title)
+            .setView(container)
+            .setNegativeButton(R.string.baby_helper_input_cancel, null)
+            .setPositiveButton(R.string.baby_custom_add, null)
+            .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(v -> {
+                String label = labelInput.getText() != null
+                    ? labelInput.getText().toString().trim() : "";
+                String command = commandInput.getText() != null
+                    ? commandInput.getText().toString().trim() : "";
+                if (label.isEmpty() || command.isEmpty()) {
+                    commandInput.setError(ctx.getString(R.string.baby_custom_empty));
+                    return;
+                }
+                if (!BabyActionCatalog.isSafeForAutoRun(command)) {
+                    commandInput.setError(ctx.getString(R.string.baby_custom_unsafe));
+                    return;
+                }
+                String id = "custom_" + System.currentTimeMillis();
+                List<BabyCustomCommand> customs = BabyPreferences.getCustomCommands(activity);
+                customs.add(new BabyCustomCommand(id, label, command));
+                BabyPreferences.setCustomCommands(activity, customs);
+                List<String> ids = BabyPreferences.getPinnedIds(activity);
+                ids.add(id);
+                BabyPreferences.setPinnedIds(activity, ids);
+                dialog.dismiss();
+                buildGrid();
+            }));
+
+        dialog.show();
     }
 
     private void updateStatusBadge() {
-        if (environmentReady) {
-            statusTextView.setText(R.string.baby_home_status_ready);
-            statusIconView.setImageResource(R.drawable.ic_baby_check);
-            ImageViewCompat.setImageTintList(
-                statusIconView,
-                ColorStateList.valueOf(ContextCompat.getColor(activity, R.color.baby_on_primary_container))
-            );
-        } else {
+        // The header row is a preparing banner only: once the environment
+        // is ready it leaves the home entirely (no permanent greeting noise
+        // on a shortcut surface).
+        headerRow.setVisibility(environmentReady ? View.GONE : View.VISIBLE);
+        if (!environmentReady) {
             statusTextView.setText(R.string.baby_home_status_preparing);
             statusIconView.setImageResource(R.drawable.ic_baby_sparkle);
             ImageViewCompat.setImageTintList(
                 statusIconView,
-                ColorStateList.valueOf(ContextCompat.getColor(activity, R.color.baby_on_primary_container))
+                ColorStateList.valueOf(
+                    ContextCompat.getColor(activity, R.color.baby_on_primary_container))
             );
         }
     }
@@ -466,18 +981,25 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         }
         float translateY = 12f * activity.getResources().getDisplayMetrics().density;
         DecelerateInterpolator interpolator = new DecelerateInterpolator();
-        for (int i = 0; i < CARD_VIEW_IDS.length; i++) {
-            View card = babyHomeRoot.findViewById(CARD_VIEW_IDS[i]);
-            if (card == null) continue;
-            card.setAlpha(0f);
-            card.setTranslationY(translateY);
-            card.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setStartDelay(i * 60L)
-                .setDuration(220L)
-                .setInterpolator(interpolator)
-                .start();
+        int delayIndex = 0;
+        for (int i = 0; i < gridContainer.getChildCount(); i++) {
+            View row = gridContainer.getChildAt(i);
+            if (!(row instanceof LinearLayout)) continue;
+            LinearLayout rowLayout = (LinearLayout) row;
+            for (int j = 0; j < rowLayout.getChildCount(); j++) {
+                View card = rowLayout.getChildAt(j);
+                if (!(card instanceof MaterialCardView)) continue;
+                card.setAlpha(0f);
+                card.setTranslationY(translateY);
+                card.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setStartDelay(delayIndex * 60L)
+                    .setDuration(220L)
+                    .setInterpolator(interpolator)
+                    .start();
+                delayIndex++;
+            }
         }
     }
 

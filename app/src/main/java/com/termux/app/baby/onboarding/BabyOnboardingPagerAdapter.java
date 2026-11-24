@@ -11,49 +11,53 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
-import android.view.animation.OvershootInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.core.content.ContextCompat;
 import androidx.viewpager.widget.PagerAdapter;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.termux.R;
+import com.termux.app.baby.BabyAction;
+import com.termux.app.baby.BabyActionCatalog;
 import com.termux.app.baby.BabyPreferences;
 
 /**
- * 7-page 1-page-1-claim onboarding adapter for Termux Baby.
+ * 3-page onboarding for Termux Baby (redesign):
  *
- * Pages:
- * 0 - Hook / Identity
- * 1 - 3-Choice Goal Selector (no Next button; tap triggers bounce + haptic + praise -> auto-advance)
- * 2 - Match Declaration (dedicated result page echoing the chosen goal + 1 core strength)
- * 3 - Step 1/3: Pick a card
- * 4 - Step 2/3: See clear results
- * 5 - Step 3/3: Switch to Pro anytime
- * 6 - Connect / CTA: Let's try your first tap
+ * 0 - Concept: "a terminal that teaches you commands as you tap" — real
+ *     commands on cards, never hidden, never "no commands needed".
+ * 1 - 3-Choice Goal Selector (tap triggers bounce + haptic + praise, then
+ *     auto-advance). The goal seeds the home curriculum.
+ * 2 - Try it now: the user runs ONE real command inside onboarding and
+ *     sees the command, the meaning of its parts, and the result — the
+ *     whole learning loop in miniature — before reaching Home.
  */
 public class BabyOnboardingPagerAdapter extends PagerAdapter {
 
-    public static final int PAGE_HOOK = 0;
+    public static final int PAGE_CONCEPT = 0;
+    /** Kept for compatibility with existing references. */
+    public static final int PAGE_HOOK = PAGE_CONCEPT;
     public static final int PAGE_CHOICE = 1;
-    public static final int PAGE_MATCH = 2;
-    public static final int PAGE_STEP_1 = 3;
-    public static final int PAGE_STEP_2 = 4;
-    public static final int PAGE_STEP_3 = 5;
-    public static final int PAGE_CTA = 6;
-    public static final int PAGE_COUNT = 7;
+    public static final int PAGE_TRY = 2;
+    /** Kept for compatibility: the try page is the final CTA page. */
+    public static final int PAGE_CTA = PAGE_TRY;
+    public static final int PAGE_COUNT = 3;
 
     public interface OnboardingInteractionListener {
-        /** Called when the user taps one of the 3 choices on Page 2. */
+        /** Called when the user taps one of the 3 choices on the choice page. */
         void onGoalChoiceSelected(@NonNull String goal);
 
         /** Called if the user taps the praise banner during the linger delay to advance immediately. */
         void onPraiseTappedToAdvance();
+
+        /** Called when the user taps "run it" on the try page. */
+        void onTryRunRequested();
     }
 
     private final Context mContext;
@@ -64,6 +68,8 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
     @NonNull
     private String mSelectedGoal = BabyPreferences.GOAL_EXPLORE;
     private boolean mHasUserSelectedGoal = false;
+    private boolean mTryRunning = false;
+    private boolean mTryDone = false;
 
     public BabyOnboardingPagerAdapter(@NonNull Context context,
                                       @NonNull OnboardingInteractionListener listener) {
@@ -75,13 +81,42 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
     public void setSelectedGoal(@NonNull String goal, boolean userSelected) {
         mSelectedGoal = goal;
         mHasUserSelectedGoal = userSelected;
-        updateMatchPageContent();
         updateChoicePageSelectionState(false);
+        bindTryPageContent();
     }
 
     @NonNull
     public String getSelectedGoal() {
         return mSelectedGoal;
+    }
+
+    /** The action the try page runs for the current goal. */
+    @NonNull
+    public BabyAction getTryAction() {
+        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal)) {
+            BabyAction action = BabyActionCatalog.findById(BabyActionCatalog.ACTION_TRY_PYTHON);
+            if (action != null) return action;
+        } else if (BabyPreferences.GOAL_FILES_DEVICE.equals(mSelectedGoal)) {
+            BabyAction action = BabyActionCatalog.findById(BabyActionCatalog.ACTION_SEE_FILES);
+            if (action != null) return action;
+        }
+        BabyAction pwd = BabyActionCatalog.findById("recipe_pwd");
+        if (pwd != null) return pwd;
+        return BabyActionCatalog.getHomeActions().get(0);
+    }
+
+    /** The literal command the try page runs (Hello-Python for the Python goal). */
+    @NonNull
+    public String getTryCommand() {
+        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal)) {
+            return BabyActionCatalog.PYTHON_HELLO_COMMAND;
+        }
+        BabyAction action = getTryAction();
+        return action.commandTemplate != null ? action.commandTemplate : "";
+    }
+
+    public boolean isTryDone() {
+        return mTryDone;
     }
 
     @Override
@@ -101,9 +136,12 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         if (position == PAGE_CHOICE) {
             pageView = mInflater.inflate(R.layout.item_baby_onboarding_choice, container, false);
             bindChoicePage(pageView);
+        } else if (position == PAGE_TRY) {
+            pageView = mInflater.inflate(R.layout.item_baby_onboarding_try, container, false);
+            bindTryPage(pageView);
         } else {
             pageView = mInflater.inflate(R.layout.item_baby_onboarding_info, container, false);
-            bindInfoPage(pageView, position);
+            bindConceptPage(pageView);
         }
         container.addView(pageView);
         mInstantiatedViews.put(position, pageView);
@@ -124,21 +162,13 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
     @NonNull
     public CharSequence getPageHeadline(int position) {
         switch (position) {
-            case PAGE_HOOK:
-                return mContext.getString(R.string.baby_onboarding_p1_title);
             case PAGE_CHOICE:
                 return mContext.getString(R.string.baby_onboarding_p2_title);
-            case PAGE_MATCH:
-                return mContext.getString(R.string.baby_onboarding_p3_title);
-            case PAGE_STEP_1:
-                return mContext.getString(R.string.baby_onboarding_p4_title);
-            case PAGE_STEP_2:
-                return mContext.getString(R.string.baby_onboarding_p5_title);
-            case PAGE_STEP_3:
-                return mContext.getString(R.string.baby_onboarding_p6_title);
-            case PAGE_CTA:
+            case PAGE_TRY:
+                return mContext.getString(R.string.baby_onboarding_try_title);
+            case PAGE_CONCEPT:
             default:
-                return mContext.getString(R.string.baby_onboarding_p7_title);
+                return mContext.getString(R.string.baby_onboarding_p1_title);
         }
     }
 
@@ -152,31 +182,12 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
 
         boolean animate = BabyPreferences.areAnimationsEnabled(mContext);
 
-        switch (position) {
-            case PAGE_HOOK:
-                animateHookPage(pageView, animate);
-                break;
-            case PAGE_CHOICE:
-                updateChoicePageSelectionState(false);
-                break;
-            case PAGE_MATCH:
-                updateMatchPageContent();
-                animateMatchPageStaged(pageView, animate);
-                break;
-            case PAGE_STEP_1:
-                animateStep1CardLift(pageView, animate);
-                break;
-            case PAGE_STEP_2:
-                animateStep2CheckReveal(pageView, animate);
-                break;
-            case PAGE_STEP_3:
-                animateStep3ToggleDemo(pageView, animate);
-                break;
-            case PAGE_CTA:
-                animateCtaPage(pageView, animate);
-                break;
-            default:
-                break;
+        if (position == PAGE_CONCEPT) {
+            animateHookPage(pageView, animate);
+        } else if (position == PAGE_CHOICE) {
+            updateChoicePageSelectionState(false);
+        } else if (position == PAGE_TRY) {
+            bindTryPageContent();
         }
     }
 
@@ -190,12 +201,11 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         }
     }
 
-    private void bindInfoPage(@NonNull View view, int position) {
+    private void bindConceptPage(@NonNull View view) {
         TextView titleView = view.findViewById(R.id.onboarding_title);
         TextView bodyView = view.findViewById(R.id.onboarding_body);
         ImageView heroIcon = view.findViewById(R.id.onboarding_hero_icon);
         View heroBadge = view.findViewById(R.id.onboarding_hero_badge);
-        ImageView heroBadgeIcon = view.findViewById(R.id.onboarding_hero_badge_icon);
         View mirrorContainer = view.findViewById(R.id.onboarding_mirror_container);
         View proToggleDemo = view.findViewById(R.id.onboarding_pro_toggle_demo);
 
@@ -203,50 +213,9 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         mirrorContainer.setVisibility(View.GONE);
         proToggleDemo.setVisibility(View.GONE);
 
-        switch (position) {
-            case PAGE_HOOK:
-                titleView.setText(R.string.baby_onboarding_p1_title);
-                bodyView.setText(R.string.baby_onboarding_p1_body);
-                heroIcon.setImageResource(R.drawable.ic_baby_sparkle);
-                break;
-
-            case PAGE_MATCH:
-                titleView.setText(R.string.baby_onboarding_p3_title);
-                heroBadge.setVisibility(View.VISIBLE);
-                heroBadgeIcon.setImageResource(R.drawable.ic_baby_check);
-                mirrorContainer.setVisibility(View.VISIBLE);
-                bindMatchContentIntoView(view);
-                break;
-
-            case PAGE_STEP_1:
-                titleView.setText(R.string.baby_onboarding_p4_title);
-                bodyView.setText(R.string.baby_onboarding_p4_body);
-                heroIcon.setImageResource(R.drawable.ic_baby_cards);
-                break;
-
-            case PAGE_STEP_2:
-                titleView.setText(R.string.baby_onboarding_p5_title);
-                bodyView.setText(R.string.baby_onboarding_p5_body);
-                heroIcon.setImageResource(R.drawable.ic_baby_check);
-                break;
-
-            case PAGE_STEP_3:
-                titleView.setText(R.string.baby_onboarding_p6_title);
-                bodyView.setText(R.string.baby_onboarding_p6_body);
-                heroIcon.setImageResource(R.drawable.ic_baby_switch);
-                proToggleDemo.setVisibility(View.VISIBLE);
-                applyProToggleDemoState(view, false);
-                break;
-
-            case PAGE_CTA:
-            default:
-                titleView.setText(R.string.baby_onboarding_p7_title);
-                bodyView.setText(R.string.baby_onboarding_p7_body);
-                heroIcon.setImageResource(R.drawable.ic_baby_sparkle);
-                heroBadge.setVisibility(View.VISIBLE);
-                heroBadgeIcon.setImageResource(R.drawable.ic_baby_check);
-                break;
-        }
+        titleView.setText(R.string.baby_onboarding_p1_title);
+        bodyView.setText(R.string.baby_onboarding_p1_body);
+        heroIcon.setImageResource(R.drawable.ic_baby_terminal);
     }
 
     private void bindChoicePage(@NonNull View view) {
@@ -284,14 +253,10 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         mSelectedGoal = goal;
         mHasUserSelectedGoal = true;
 
-        // Medium haptic feedback (respecting OS settings)
         performConfirmHaptic(tappedCard);
-
-        // Visual selection state + bounce animation
         updateChoicePageSelectionState(true);
         animateChoiceBounce(tappedCard, BabyPreferences.areAnimationsEnabled(mContext));
 
-        // Show specific encouraging praise sentence immediately on the current page
         View praiseContainer = pageView.findViewById(R.id.onboarding_praise_container);
         TextView praiseText = pageView.findViewById(R.id.onboarding_praise_text);
         praiseText.setText(getPraiseStringResForGoal(goal));
@@ -312,9 +277,7 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
             praiseContainer.setTranslationY(0f);
         }
 
-        // Update Match Declaration page in advance so it's ready after the linger
-        updateMatchPageContent();
-
+        bindTryPageContent();
         mListener.onGoalChoiceSelected(goal);
     }
 
@@ -359,27 +322,63 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         checkIcon.setVisibility(selected ? View.VISIBLE : View.INVISIBLE);
     }
 
-    private void updateMatchPageContent() {
-        View matchView = mInstantiatedViews.get(PAGE_MATCH);
-        if (matchView != null) {
-            bindMatchContentIntoView(matchView);
-        }
+    // --- Try page ---
+
+    private void bindTryPage(@NonNull View view) {
+        MaterialButton runButton = view.findViewById(R.id.onboarding_try_run_button);
+        runButton.setOnClickListener(v -> {
+            if (mTryRunning || mTryDone) return;
+            mTryRunning = true;
+            runButton.setEnabled(false);
+            runButton.setText(R.string.baby_onboarding_try_running);
+            mListener.onTryRunRequested();
+        });
+        bindTryPageContent();
     }
 
-    private void bindMatchContentIntoView(@NonNull View view) {
-        TextView mirrorText = view.findViewById(R.id.onboarding_mirror_text);
-        TextView bodyView = view.findViewById(R.id.onboarding_body);
-        ImageView heroIcon = view.findViewById(R.id.onboarding_hero_icon);
+    /** (Re)fills the try page's command + part meanings for the current goal. */
+    public void bindTryPageContent() {
+        View view = mInstantiatedViews.get(PAGE_TRY);
+        if (view == null) return;
+        TextView commandView = view.findViewById(R.id.onboarding_try_command);
+        TextView tokensView = view.findViewById(R.id.onboarding_try_tokens);
+        commandView.setText(BabyActionCatalog.truncateForDisplay(getTryCommand()));
+        StringBuilder tokens = new StringBuilder();
+        for (BabyAction.TokenNote note : BabyActionCatalog.getTokenNotes(getTryAction().id)) {
+            if (tokens.length() > 0) tokens.append('\n');
+            tokens.append(note.token).append(" — ").append(mContext.getString(note.meaningResId));
+        }
+        tokensView.setText(tokens.toString());
+        tokensView.setVisibility(tokens.length() > 0 ? View.VISIBLE : View.GONE);
+    }
 
-        mirrorText.setText(getChoiceStringResForGoal(mSelectedGoal));
-        bodyView.setText(getMatchStringResForGoal(mSelectedGoal));
-        heroIcon.setImageResource(getIconResForGoal(mSelectedGoal));
+    /** Shows the try run's outcome: friendly summary first, raw output under it. */
+    public void showTryResult(@NonNull String summary, @Nullable String rawOutput) {
+        mTryRunning = false;
+        mTryDone = true;
+        View view = mInstantiatedViews.get(PAGE_TRY);
+        if (view == null) return;
+        MaterialButton runButton = view.findViewById(R.id.onboarding_try_run_button);
+        runButton.setVisibility(View.GONE);
+        TextView resultView = view.findViewById(R.id.onboarding_try_result);
+        resultView.setText(summary + "\n\n" + mContext.getString(R.string.baby_onboarding_try_done));
+        resultView.setVisibility(View.VISIBLE);
+        TextView rawView = view.findViewById(R.id.onboarding_try_raw);
+        if (rawOutput != null && !rawOutput.trim().isEmpty()) {
+            String raw = rawOutput.trim();
+            if (raw.length() > 300) raw = raw.substring(0, 300) + "…";
+            rawView.setText(raw);
+            rawView.setVisibility(View.VISIBLE);
+        } else {
+            rawView.setVisibility(View.GONE);
+        }
     }
 
     // ---- Meaningful Page Animations (only when motion is enabled) ----
 
     private void animateHookPage(@NonNull View view, boolean animate) {
         View visual = view.findViewById(R.id.onboarding_visual_container);
+        if (visual == null) return;
         if (!animate) {
             visual.setAlpha(1f);
             visual.setScaleX(1f);
@@ -396,139 +395,6 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
             .scaleY(1f)
             .setDuration(300L)
             .setInterpolator(new DecelerateInterpolator())
-            .start();
-    }
-
-    /**
-     * Staged sequential entrance on Page 3 (Match Declaration):
-     * 1) Echoed user choice -> 2) Hero visual -> 3) Headline -> 4) Match strength (150ms apart).
-     */
-    private void animateMatchPageStaged(@NonNull View view, boolean animate) {
-        View mirror = view.findViewById(R.id.onboarding_mirror_container);
-        View visual = view.findViewById(R.id.onboarding_visual_container);
-        View title = view.findViewById(R.id.onboarding_title);
-        View body = view.findViewById(R.id.onboarding_body);
-
-        View[] sequence = new View[]{mirror, visual, title, body};
-        for (int i = 0; i < sequence.length; i++) {
-            View target = sequence[i];
-            target.animate().cancel();
-            if (!animate) {
-                target.setAlpha(1f);
-                target.setTranslationY(0f);
-            } else {
-                target.setAlpha(0f);
-                target.setTranslationY(dpToPx(10f));
-                target.animate()
-                    .alpha(1f)
-                    .translationY(0f)
-                    .setStartDelay(i * 150L)
-                    .setDuration(260L)
-                    .setInterpolator(new DecelerateInterpolator())
-                    .start();
-            }
-        }
-    }
-
-    private void animateStep1CardLift(@NonNull View view, boolean animate) {
-        View visualCard = view.findViewById(R.id.onboarding_visual_card);
-        visualCard.animate().cancel();
-        if (!animate) {
-            visualCard.setTranslationY(0f);
-            visualCard.setScaleX(1f);
-            visualCard.setScaleY(1f);
-            return;
-        }
-        visualCard.setTranslationY(dpToPx(8f));
-        visualCard.setScaleX(0.96f);
-        visualCard.setScaleY(0.96f);
-        visualCard.animate()
-            .translationY(0f)
-            .scaleX(1f)
-            .scaleY(1f)
-            .setDuration(250L)
-            .setInterpolator(new OvershootInterpolator(1.2f))
-            .start();
-    }
-
-    private void animateStep2CheckReveal(@NonNull View view, boolean animate) {
-        View heroIcon = view.findViewById(R.id.onboarding_hero_icon);
-        heroIcon.animate().cancel();
-        if (!animate) {
-            heroIcon.setScaleX(1f);
-            heroIcon.setScaleY(1f);
-            heroIcon.setAlpha(1f);
-            return;
-        }
-        heroIcon.setScaleX(0.55f);
-        heroIcon.setScaleY(0.55f);
-        heroIcon.setAlpha(0f);
-        heroIcon.animate()
-            .scaleX(1f)
-            .scaleY(1f)
-            .alpha(1f)
-            .setDuration(280L)
-            .setInterpolator(new OvershootInterpolator(1.6f))
-            .start();
-    }
-
-    private void animateStep3ToggleDemo(@NonNull View view, boolean animate) {
-        applyProToggleDemoState(view, false);
-        if (!animate) return;
-
-        // One clear demonstration: Easy -> Terminal -> Easy (not an endless distracting loop)
-        view.postDelayed(() -> {
-            if (view.isAttachedToWindow()) {
-                applyProToggleDemoState(view, true);
-            }
-        }, 420L);
-        view.postDelayed(() -> {
-            if (view.isAttachedToWindow()) {
-                applyProToggleDemoState(view, false);
-            }
-        }, 1250L);
-    }
-
-    private void applyProToggleDemoState(@NonNull View view, boolean proActive) {
-        TextView easyLabel = view.findViewById(R.id.onboarding_demo_easy);
-        TextView proLabel = view.findViewById(R.id.onboarding_demo_pro);
-        if (easyLabel == null || proLabel == null) return;
-
-        int activeText = ContextCompat.getColor(mContext, R.color.baby_on_primary);
-        int inactiveText = ContextCompat.getColor(mContext, R.color.baby_text_secondary);
-
-        if (proActive) {
-            easyLabel.setBackground(null);
-            easyLabel.setTextColor(inactiveText);
-            proLabel.setBackgroundResource(R.drawable.baby_pill_selected);
-            proLabel.setTextColor(activeText);
-        } else {
-            easyLabel.setBackgroundResource(R.drawable.baby_pill_selected);
-            easyLabel.setTextColor(activeText);
-            proLabel.setBackground(null);
-            proLabel.setTextColor(inactiveText);
-        }
-    }
-
-    private void animateCtaPage(@NonNull View view, boolean animate) {
-        View badge = view.findViewById(R.id.onboarding_hero_badge);
-        badge.animate().cancel();
-        if (!animate) {
-            badge.setScaleX(1f);
-            badge.setScaleY(1f);
-            badge.setAlpha(1f);
-            return;
-        }
-        badge.setScaleX(0.4f);
-        badge.setScaleY(0.4f);
-        badge.setAlpha(0f);
-        badge.animate()
-            .scaleX(1f)
-            .scaleY(1f)
-            .alpha(1f)
-            .setStartDelay(140L)
-            .setDuration(300L)
-            .setInterpolator(new OvershootInterpolator(1.8f))
             .start();
     }
 
@@ -553,24 +419,8 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         if (heroIcon != null) heroIcon.animate().cancel();
         View badge = view.findViewById(R.id.onboarding_hero_badge);
         if (badge != null) badge.animate().cancel();
-        View mirror = view.findViewById(R.id.onboarding_mirror_container);
-        if (mirror != null) mirror.animate().cancel();
-        View title = view.findViewById(R.id.onboarding_title);
-        if (title != null) title.animate().cancel();
-        View body = view.findViewById(R.id.onboarding_body);
-        if (body != null) body.animate().cancel();
         View praise = view.findViewById(R.id.onboarding_praise_container);
         if (praise != null) praise.animate().cancel();
-    }
-
-    @StringRes
-    private static int getChoiceStringResForGoal(@NonNull String goal) {
-        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(goal)) {
-            return R.string.baby_onboarding_choice_1;
-        } else if (BabyPreferences.GOAL_FILES_DEVICE.equals(goal)) {
-            return R.string.baby_onboarding_choice_2;
-        }
-        return R.string.baby_onboarding_choice_3;
     }
 
     @StringRes
@@ -581,26 +431,6 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
             return R.string.baby_onboarding_praise_2;
         }
         return R.string.baby_onboarding_praise_3;
-    }
-
-    @StringRes
-    private static int getMatchStringResForGoal(@NonNull String goal) {
-        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(goal)) {
-            return R.string.baby_onboarding_match_1;
-        } else if (BabyPreferences.GOAL_FILES_DEVICE.equals(goal)) {
-            return R.string.baby_onboarding_match_2;
-        }
-        return R.string.baby_onboarding_match_3;
-    }
-
-    @DrawableRes
-    private static int getIconResForGoal(@NonNull String goal) {
-        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(goal)) {
-            return R.drawable.ic_baby_python;
-        } else if (BabyPreferences.GOAL_FILES_DEVICE.equals(goal)) {
-            return R.drawable.ic_baby_files;
-        }
-        return R.drawable.ic_baby_explore;
     }
 
     public static void performConfirmHaptic(@NonNull View view) {

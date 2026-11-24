@@ -3,6 +3,8 @@ package com.termux.app.baby
 import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -21,7 +23,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * JVM screenshot test for the fork's Easy Mode home screen
- * (`view_baby_home.xml` + [BabyModeController] card binding).
+ * (`view_baby_home.xml` + [BabyModeController] dynamic grid binding).
  *
  * Part of the pre-delivery UI verification standard (no emulator):
  * catches layout collapse / blank screens on the JVM before delivery.
@@ -41,8 +43,18 @@ class BabyHomeScreenshotTest {
         controller = null
     }
 
+    private fun collectCards(container: ViewGroup, into: MutableList<View>) {
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i)
+            if (child.id == R.id.baby_card_title || child is com.google.android.material.card.MaterialCardView) {
+                if (child is com.google.android.material.card.MaterialCardView) into.add(child)
+            }
+            if (child is ViewGroup) collectCards(child, into)
+        }
+    }
+
     @Test
-    fun babyHome_rendersSixActionCardsAndCta() {
+    fun babyHome_rendersPinnedCardsWithCommandsAndCta() {
         val activityController = Robolectric.buildActivity(AppCompatActivity::class.java)
         val activity = activityController.get()
         activity.setTheme(R.style.Theme_TermuxBaby_Onboarding)
@@ -68,23 +80,31 @@ class BabyHomeScreenshotTest {
         assertTrue("baby home root has no height", root.height > 0)
         assertEquals(View.VISIBLE, root.visibility)
 
-        // All six home action cards are bound with real titles from the catalog.
-        val actions = BabyActionCatalog.getHomeActions()
-        assertEquals(6, actions.size)
-        val cardIds = intArrayOf(
-            R.id.baby_card_0, R.id.baby_card_1, R.id.baby_card_2,
-            R.id.baby_card_3, R.id.baby_card_4, R.id.baby_card_5
-        )
-        for ((index, cardId) in cardIds.withIndex()) {
-            val card = root.findViewById<View>(cardId)
-            val title = card.findViewById<TextView>(R.id.baby_card_title)
-            assertEquals(
-                activity.getString(actions[index].titleResId),
-                title.text.toString()
-            )
-        }
+        // The grid is built dynamically from the pinned ids: default pins
+        // resolve to 6 cards, each showing its REAL command (the redesign's
+        // core promise — commands are visible, not hidden).
+        val grid = root.findViewById<LinearLayout>(R.id.baby_action_grid)
+        val cards = mutableListOf<View>()
+        collectCards(grid, cards)
+        val pinnedIds = BabyPreferences.getPinnedIds(activity)
+        assertEquals(pinnedIds.size, cards.size)
+        assertTrue("expected at least 6 default pinned cards", cards.size >= 6)
 
-        // Primary CTA is present and labelled.
+        val firstCard = cards[0]
+        val firstAction = BabyActionCatalog.findById(pinnedIds[0])!!
+        val title = firstCard.findViewById<TextView>(R.id.baby_card_title)
+        assertEquals(
+            activity.getString(firstAction.titleResId),
+            title.text.toString()
+        )
+        val command = firstCard.findViewById<TextView>(R.id.baby_card_command)
+        assertEquals(View.VISIBLE, command.visibility)
+        assertEquals(
+            BabyActionCatalog.getDisplayCommandPreview(firstAction),
+            command.text.toString()
+        )
+
+        // Primary CTA is present and labelled (the command catalog).
         val cta = root.findViewById<TextView>(R.id.baby_home_find_action_button)
         assertEquals(activity.getString(R.string.baby_home_find_action), cta.text.toString())
 

@@ -58,12 +58,14 @@ public final class BabyRunSessionRegistry {
         @NonNull String command,
         @NonNull BabyAction.OutputFormat outputFormat,
         int timeoutSeconds,
-        @Nullable String displayName
+        @Nullable String displayName,
+        @Nullable String sourceId
     ) {
         BabyRunSession session;
         synchronized (sessions) {
             session = new BabyRunSession(
-                nextId++, title, iconResId, command, outputFormat, timeoutSeconds, displayName
+                nextId++, title, iconResId, command, outputFormat, timeoutSeconds, displayName,
+                sourceId
             );
             session.addListener(sessionForwarder);
             sessions.add(session);

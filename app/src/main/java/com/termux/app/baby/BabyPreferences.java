@@ -27,6 +27,15 @@ public final class BabyPreferences {
     private static final String KEY_FIRST_ACTION_COMPLETED = "first_action_completed";
     private static final String KEY_EXTRA_KEYS_PRESET = "extra_keys_preset";
     private static final String KEY_HUSHLOGIN_INITIALIZED = "hushlogin_initialized";
+    private static final String KEY_PINNED_IDS = "pinned_ids";
+    private static final String KEY_CUSTOM_COMMANDS = "custom_commands";
+    private static final String KEY_RUN_COUNT_PREFIX = "run_count_";
+    private static final String KEY_LAST_RESULT_PREFIX = "last_result_";
+    private static final String KEY_LAST_RESULT_OK_PREFIX = "last_result_ok_";
+
+    /** Home grid contents on first run (after the redesign): the learnable core. */
+    public static final String DEFAULT_PINNED_IDS =
+        "see_files,recipe_pwd,check_network,device_info,try_python,install_tools";
 
     /** Extra keys preset: plain 2-row × 7 control panel — control keys and arrows (default). */
     public static final String EXTRA_KEYS_PRESET_SIMPLE = "simple";
@@ -143,6 +152,114 @@ public final class BabyPreferences {
         } else {
             return BabyActionCatalog.ACTION_SEE_FILES;
         }
+    }
+
+    // --- Learning progress & home grid state (Easy Mode redesign) ---
+
+    /** How many times this action/recipe/custom command has been run. */
+    public static int getRunCount(@NonNull Context context, @NonNull String itemId) {
+        return getPrefs(context).getInt(KEY_RUN_COUNT_PREFIX + itemId, 0);
+    }
+
+    /** Records one more run of the item and returns the new count. */
+    public static int incrementRunCount(@NonNull Context context, @NonNull String itemId) {
+        int next = getRunCount(context, itemId) + 1;
+        getPrefs(context).edit().putInt(KEY_RUN_COUNT_PREFIX + itemId, next).commit();
+        return next;
+    }
+
+    /** One-line summary of the item's last run ("12 files", "つながっています"), or null. */
+    @Nullable
+    public static String getLastResultSummary(@NonNull Context context, @NonNull String itemId) {
+        return getPrefs(context).getString(KEY_LAST_RESULT_PREFIX + itemId, null);
+    }
+
+    public static boolean getLastResultOk(@NonNull Context context, @NonNull String itemId) {
+        return getPrefs(context).getBoolean(KEY_LAST_RESULT_OK_PREFIX + itemId, false);
+    }
+
+    public static void setLastResult(
+        @NonNull Context context,
+        @NonNull String itemId,
+        boolean ok,
+        @Nullable String summary
+    ) {
+        SharedPreferences.Editor editor = getPrefs(context).edit()
+            .putBoolean(KEY_LAST_RESULT_OK_PREFIX + itemId, ok);
+        if (summary != null) {
+            editor.putString(KEY_LAST_RESULT_PREFIX + itemId, summary);
+        }
+        editor.commit();
+    }
+
+    /** Ordered ids shown on the Easy Home grid (catalog ids and custom ids). */
+    @NonNull
+    public static java.util.List<String> getPinnedIds(@NonNull Context context) {
+        String raw = getPrefs(context).getString(KEY_PINNED_IDS, DEFAULT_PINNED_IDS);
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        if (raw != null) {
+            for (String part : raw.split(",")) {
+                String id = part.trim();
+                if (!id.isEmpty() && !ids.contains(id)) ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    public static void setPinnedIds(@NonNull Context context, @NonNull java.util.List<String> ids) {
+        getPrefs(context).edit()
+            .putString(KEY_PINNED_IDS, android.text.TextUtils.join(",", ids))
+            .commit();
+    }
+
+    /** User-registered shortcut commands, in registration order. */
+    @NonNull
+    public static java.util.List<BabyCustomCommand> getCustomCommands(@NonNull Context context) {
+        java.util.List<BabyCustomCommand> result = new java.util.ArrayList<>();
+        String raw = getPrefs(context).getString(KEY_CUSTOM_COMMANDS, null);
+        if (raw == null || raw.isEmpty()) return result;
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) {
+                org.json.JSONObject obj = array.optJSONObject(i);
+                if (obj == null) continue;
+                String id = obj.optString("id", "");
+                String label = obj.optString("label", "");
+                String command = obj.optString("command", "");
+                if (!id.isEmpty() && !command.isEmpty()) {
+                    result.add(new BabyCustomCommand(id, label, command));
+                }
+            }
+        } catch (org.json.JSONException ignored) {
+            // Corrupt storage must never crash the home screen; start clean.
+        }
+        return result;
+    }
+
+    public static void setCustomCommands(
+        @NonNull Context context,
+        @NonNull java.util.List<BabyCustomCommand> commands
+    ) {
+        org.json.JSONArray array = new org.json.JSONArray();
+        for (BabyCustomCommand command : commands) {
+            org.json.JSONObject obj = new org.json.JSONObject();
+            try {
+                obj.put("id", command.id);
+                obj.put("label", command.label);
+                obj.put("command", command.command);
+            } catch (org.json.JSONException ignored) {
+            }
+            array.put(obj);
+        }
+        getPrefs(context).edit().putString(KEY_CUSTOM_COMMANDS, array.toString()).commit();
+    }
+
+    @Nullable
+    public static BabyCustomCommand findCustomCommand(@NonNull Context context, @NonNull String id) {
+        for (BabyCustomCommand command : getCustomCommands(context)) {
+            if (command.id.equals(id)) return command;
+        }
+        return null;
     }
 
     /** Returns true once ~/.hushlogin has been created successfully. */

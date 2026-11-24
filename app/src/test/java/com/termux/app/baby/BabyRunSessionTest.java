@@ -37,7 +37,7 @@ public class BabyRunSessionTest {
     private BabyRunSession startEcho(BabyRunSessionRegistry registry, BabyCommandExecutor executor, String command) {
         BabyRunSession session = registry.create(
             "Test", R.drawable.ic_baby_sparkle, command,
-            BabyAction.OutputFormat.GENERIC, 30, "Test"
+            BabyAction.OutputFormat.GENERIC, 30, "Test", "test_source"
         );
         session.start(executor);
         return session;
@@ -57,7 +57,7 @@ public class BabyRunSessionTest {
         BabyRunSessionRegistry registry = new BabyRunSessionRegistry();
         BabyRunSession session = registry.create(
             "A", R.drawable.ic_baby_sparkle, "true",
-            BabyAction.OutputFormat.GENERIC, 5, null
+            BabyAction.OutputFormat.GENERIC, 5, null, null
         );
         assertEquals(1, registry.getSessions().size());
         assertTrue(registry.hasRunning());
@@ -108,7 +108,7 @@ public class BabyRunSessionTest {
 
         BabyRunSession running = registry.create(
             "B", R.drawable.ic_baby_sparkle, "sleep 30",
-            BabyAction.OutputFormat.GENERIC, 60, null
+            BabyAction.OutputFormat.GENERIC, 60, null, null
         );
 
         // Unseen finished sessions stay (the bar still needs to show them).

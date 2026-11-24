@@ -60,12 +60,69 @@
             app:tint="@color/baby_text_secondary" />
     </LinearLayout>
 
-    <!-- Status Banner / Friendly Result Area -->
+    <!-- The command itself, always visible (learning step 1: see it), with
+         tappable part-by-part meanings (step 3: understand the parts). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/baby_code_box"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/baby_runner_command_label"
+            android:textAppearance="@style/TextAppearance.Baby.Caption" />
+
+        <TextView
+            android:id="@+id/runner_command_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="@style/TextAppearance.Baby.Code"
+            android:textIsSelectable="true" />
+
+        <LinearLayout
+            android:id="@+id/runner_tokens_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/baby_runner_tokens_title"
+                android:textAppearance="@style/TextAppearance.Baby.Caption" />
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/runner_token_chips"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:singleSelection="true" />
+
+            <TextView
+                android:id="@+id/runner_token_meaning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textAppearance="@style/TextAppearance.Baby.Body"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Status Banner / Friendly Result Area: the summary is an
+         interpretation layered ON TOP of the raw output, never a
+         replacement for it. -->
     <LinearLayout
         android:id="@+id/runner_status_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:background="@drawable/baby_code_box"
         android:orientation="vertical"
         android:padding="16dp">
@@ -125,91 +182,62 @@
         app:icon="@drawable/ic_baby_install"
         app:iconGravity="textStart" />
 
-    <!-- Rank B: Collapsible Raw Output Accordion (Collapsed by default) -->
-    <LinearLayout
-        android:id="@+id/runner_details_toggle"
+    <!-- Raw output, always visible (learning step 2: pair the command with
+         its real result). -->
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background="?attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true"
-        android:gravity="center_vertical"
-        android:minHeight="48dp"
-        android:orientation="horizontal"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp">
+        android:layout_marginTop="14dp"
+        android:text="@string/baby_runner_output_title"
+        android:textAppearance="@style/TextAppearance.Baby.Caption" />
 
-        <TextView
-            android:id="@+id/runner_details_toggle_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/baby_runner_show_details"
-            android:textAppearance="@style/TextAppearance.Baby.BodySecondary" />
-
-        <ImageView
-            android:id="@+id/runner_details_chevron"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_baby_chevron_down"
-            app:tint="@color/baby_text_secondary" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/runner_details_container"
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="150dp"
+        android:layout_marginTop="6dp"
         android:background="@drawable/baby_code_box"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:visibility="gone">
+        android:padding="10dp">
 
         <TextView
+            android:id="@+id/runner_raw_output_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/baby_runner_command_label"
-            android:textAppearance="@style/TextAppearance.Baby.Caption" />
-
-        <TextView
-            android:id="@+id/runner_command_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
             android:textAppearance="@style/TextAppearance.Baby.Code"
             android:textIsSelectable="true" />
+    </ScrollView>
 
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="160dp"
-            android:layout_marginTop="10dp">
-
-            <TextView
-                android:id="@+id/runner_raw_output_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Baby.Code"
-                android:textIsSelectable="true" />
-        </ScrollView>
+    <!-- Graduation row: run it over there, or type it yourself. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="end"
+        android:orientation="horizontal">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/runner_open_pro_button"
             style="@style/Widget.Baby.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:layout_marginTop="6dp"
-            android:text="@string/baby_runner_open_pro"
+            android:text="@string/baby_runner_run_in_terminal"
             app:icon="@drawable/ic_baby_terminal"
             app:iconTint="@color/baby_text_secondary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/runner_type_myself_button"
+            style="@style/Widget.Baby.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/baby_runner_type_myself"
+            app:icon="@drawable/ic_baby_terminal"
+            app:iconTint="@color/baby_primary" />
     </LinearLayout>
 
     <!-- Bottom Thumb-Zone Action Row -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 

@@ -44,6 +44,13 @@ public final class BabyRunSession {
     public final int timeoutSeconds;
     @Nullable
     public final String displayName;
+    /**
+     * Which home/catalog item started this run (a BabyAction id, a custom
+     * command id, or an install id) — used to record learning progress
+     * (run counts, last result) against that item. Null for ad-hoc runs.
+     */
+    @Nullable
+    public final String sourceId;
 
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final StringBuilder outputBuffer = new StringBuilder();
@@ -69,7 +76,8 @@ public final class BabyRunSession {
         @NonNull String command,
         @NonNull BabyAction.OutputFormat outputFormat,
         int timeoutSeconds,
-        @Nullable String displayName
+        @Nullable String displayName,
+        @Nullable String sourceId
     ) {
         this.id = id;
         this.title = title;
@@ -78,6 +86,7 @@ public final class BabyRunSession {
         this.outputFormat = outputFormat;
         this.timeoutSeconds = timeoutSeconds;
         this.displayName = displayName;
+        this.sourceId = sourceId;
     }
 
     public void addListener(@NonNull Listener listener) {

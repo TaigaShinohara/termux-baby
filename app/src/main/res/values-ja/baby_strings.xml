@@ -10,7 +10,6 @@
     <string name="baby_home_greeting">なにをしようか？</string>
     <string name="baby_home_status_ready">準備完了</string>
     <string name="baby_home_status_preparing">準備しています…</string>
-    <string name="baby_home_find_action">ことばで探す</string>
     <string name="baby_home_find_action_cd">やりたいことを日常の言葉で探す</string>
     <string name="baby_home_recommended_badge">まずはこれ</string>
 
@@ -45,7 +44,7 @@
     <string name="baby_runner_cancel">とめる</string>
     <string name="baby_runner_install_now">今すぐ入れる</string>
     <string name="baby_runner_empty_output">無事に完了しました（表示する文字はありません）。</string>
-    <string name="baby_runner_command_label">実行したコマンド:</string>
+    <string name="baby_runner_command_label">コマンド:</string>
 
     <!-- Output Formatter Friendly Summaries -->
     <string name="baby_summary_files_empty">まだファイルはありません。「メモを書く」で最初の一つを作ってみましょう！</string>
@@ -68,7 +67,7 @@
     <string name="baby_error_generic">うまくいきませんでした。もう一度試すか、下のくわしい出力を確認できます。</string>
 
     <!-- Command Helper Sheet -->
-    <string name="baby_helper_title">ことばで探す</string>
+    <string name="baby_helper_title">コマンド図鑑</string>
     <string name="baby_helper_search_hint">やりたいことを入力…</string>
     <string name="baby_helper_cat_all">すべて</string>
     <string name="baby_helper_cat_files">ファイル</string>
@@ -145,6 +144,7 @@
     <string name="baby_session_close_last_message">最後のセッションです。閉じるとアプリも終わります。</string>
     <string name="baby_session_close_run_message">「%1$s」はまだ実行中です。止めて閉じます。</string>
     <string name="baby_session_close_button">閉じる</string>
+    <string name="baby_session_bar_current">表示中</string>
 
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">プログラミング学習や自動化に人気の言語</string>
@@ -162,8 +162,8 @@
     <string name="baby_onboarding_progress_cd">ステップ %1$d / %2$d</string>
 
     <!-- Page 1: Hook -->
-    <string name="baby_onboarding_p1_title">コマンドいらずのやさしいターミナル</string>
-    <string name="baby_onboarding_p1_body">日常のことばのカードを押すだけで、安心して使えます。</string>
+    <string name="baby_onboarding_p1_title">押すたびに、コマンドが身につくターミナル</string>
+    <string name="baby_onboarding_p1_body">カードには本物のコマンドが書いてあります。押せばそのまま動き、見ているうちに少しずつ覚えていけます。</string>
 
     <!-- Page 2: 3-Choice Goal Selector -->
     <string name="baby_onboarding_p2_title">いま一番やってみたいことは？</string>
@@ -176,7 +176,7 @@
 
     <!-- Page 3: Match Declaration -->
     <string name="baby_onboarding_p3_title">そんなあなたに、Termux Baby がぴったり</string>
-    <string name="baby_onboarding_match_1">難しいコマンドを覚えなくても、1タップでPythonやツールを試せます。</string>
+    <string name="baby_onboarding_match_1">コマンドは隠しません。押す前に見えて、意味もその場で分かります。</string>
     <string name="baby_onboarding_match_2">ファイルや容量・ネットの状態を、わかりやすい日本語ですぐ確認できます。</string>
     <string name="baby_onboarding_match_3">どのカードも安全に押せるので、自分のペースでゆっくり慣れられます。</string>
 
@@ -215,4 +215,67 @@
         <item>@string/baby_pref_extra_keys_balanced</item>
         <item>@string/baby_pref_extra_keys_classic</item>
     </string-array>
+
+    <!-- Token meanings: what each part of a command does (learning material) -->
+    <string name="baby_token_ls">ファイルとフォルダの一覧を出す</string>
+    <string name="baby_token_ls_la">隠しファイルも含めて、くわしく</string>
+    <string name="baby_token_color_never">色なしで（アプリが見やすく整えるため）</string>
+    <string name="baby_token_ping">相手が応答するか、試しに呼んでみる</string>
+    <string name="baby_token_ping_c">3回だけ</string>
+    <string name="baby_token_ping_w">返事は4秒まで待つ</string>
+    <string name="baby_token_ping_target">試し先（インターネット上の番号）</string>
+    <string name="baby_token_uname">機械の種類を出す</string>
+    <string name="baby_token_and">うまくいったら、次へ進む</string>
+    <string name="baby_token_df">空き容量を調べる（読みやすい単位で）</string>
+    <string name="baby_token_home">あなたのホームフォルダ</string>
+    <string name="baby_token_pwd">今いる場所を表示する</string>
+    <string name="baby_token_mkdir">フォルダを作る</string>
+    <string name="baby_token_mkdir_p">途中のフォルダもまとめて作る（あっても大丈夫）</string>
+    <string name="baby_token_your_name">あなたが入れる名前</string>
+    <string name="baby_token_find">今の場所から探す</string>
+    <string name="baby_token_find_depth">3階層の深さまで</string>
+    <string name="baby_token_find_iname">名前で探す（大文字・小文字は区別しない）</string>
+    <string name="baby_token_date">今の日時を表示する</string>
+    <string name="baby_token_curl">ネットの向こうへデータを取りに行く</string>
+    <string name="baby_token_curl_s">静かに（進み具合を表示しない）</string>
+    <string name="baby_token_curl_time">最大8秒まで</string>
+    <string name="baby_token_ifconfig">あなたの外向きの番号を教えてくれる場所</string>
+    <string name="baby_token_pkg">ツールを管理する命令</string>
+    <string name="baby_token_pkg_update">一覧を新しくする</string>
+    <string name="baby_token_yes">質問には全部「はい」と答える</string>
+    <string name="baby_token_python3">Python（プログラミング言語）を動かす</string>
+    <string name="baby_token_python_c">次の文をプログラムとして実行する</string>
+    <string name="baby_token_python_expr">計算する式（安全な計算だけに制限されている）</string>
+    <!-- Easy Mode redesign: home, cards, runner, catalog -->
+    <string name="baby_home_next_title">つぎに覚える</string>
+    <string name="baby_home_add_custom">自分のコマンドを追加</string>
+    <string name="baby_home_find_action">コマンド図鑑をひらく</string>
+    <string name="baby_card_mastered">おぼえた</string>
+    <string name="baby_card_rerun_cd">もう一度実行</string>
+    <string name="baby_card_menu_type">ターミナルで自分で打つ</string>
+    <string name="baby_card_menu_up">前へ移動</string>
+    <string name="baby_card_menu_down">後ろへ移動</string>
+    <string name="baby_card_menu_unpin">ホームから外す</string>
+    <string name="baby_card_menu_pin">ホームにピン留め</string>
+    <string name="baby_card_menu_delete">削除する</string>
+    <string name="baby_custom_title">自分のコマンドを追加</string>
+    <string name="baby_custom_label_hint">名前（例：アップデート）</string>
+    <string name="baby_custom_command_hint">コマンド（例：pkg upgrade -y）</string>
+    <string name="baby_custom_add">追加する</string>
+    <string name="baby_custom_unsafe">このコマンドは安全のため追加できません</string>
+    <string name="baby_custom_empty">名前とコマンドを入れてね</string>
+    <string name="baby_runner_tokens_title">コマンドの意味（タップで表示）</string>
+    <string name="baby_runner_type_myself">ターミナルで自分で打つ</string>
+    <string name="baby_runner_run_in_terminal">ターミナルで実行</string>
+    <string name="baby_runner_output_title">結果（そのままの表示）</string>
+    <string name="baby_catalog_note">メモを書く</string>
+    <string name="baby_catalog_pin">ピン留め</string>
+    <string name="baby_catalog_unpin">ピンを外す</string>
+
+    <string name="baby_onboarding_try_title">ためしに1つ、実行してみよう</string>
+    <string name="baby_onboarding_try_body">これが実際のコマンドです。ボタンを押すと、本当に動きます。</string>
+    <string name="baby_onboarding_try_run">実行してみる</string>
+    <string name="baby_onboarding_try_running">動かしています…</string>
+    <string name="baby_onboarding_try_done">これが「コマンドを実行する」ということです。ホームでも同じ流れで進みます。</string>
+    <string name="baby_onboarding_try_python_missing">Pythonはまだ入っていませんでした。ホームの「ツールを入れる」から、1タップで入ります。</string>
 </resources>

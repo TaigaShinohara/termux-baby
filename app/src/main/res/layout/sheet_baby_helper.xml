@@ -129,6 +129,19 @@
         </com.google.android.material.chip.ChipGroup>
     </HorizontalScrollView>
 
+    <!-- Utility row: the quick note lives here now (it is not a command,
+         so it left the home grid; the catalog is its shelf). -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/helper_note_button"
+        style="@style/Widget.Baby.SecondaryButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/baby_catalog_note"
+        app:icon="@drawable/ic_baby_note"
+        app:iconGravity="textStart"
+        app:iconPadding="10dp" />
+
     <!-- Recipe List -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/helper_recipe_list"

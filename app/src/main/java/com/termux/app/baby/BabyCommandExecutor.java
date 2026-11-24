@@ -39,6 +39,13 @@ public final class BabyCommandExecutor {
      */
     public interface ProTerminalBridge {
         void openInProTerminal(@Nullable String commandToRun);
+
+        /**
+         * Opens the Pro terminal with the command TYPED but not executed —
+         * the last step of the learning loop, where the user presses Enter
+         * themselves.
+         */
+        void openInProTerminalToType(@Nullable String commandToType);
     }
 
     /**
