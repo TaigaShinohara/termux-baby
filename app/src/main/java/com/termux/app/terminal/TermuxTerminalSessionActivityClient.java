@@ -518,7 +518,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 props.setProperty("color5", "#C792D8");
                 props.setProperty("color6", "#5FC4B5");
                 props.setProperty("color7", "#C9D1D9");
-                props.setProperty("color8", "#5B6577");
+                // color8 lifted from #5B6577: bright black (comments, dim text)
+                // was hard to read on the #161920 background on phone screens.
+                props.setProperty("color8", "#78849A");
                 props.setProperty("color9", "#FF9A97");
                 props.setProperty("color10", "#8FE0AE");
                 props.setProperty("color11", "#F2CE8F");

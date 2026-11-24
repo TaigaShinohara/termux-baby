@@ -244,7 +244,7 @@ public final class ExtraKeysView extends GridLayout {
 
         setBackgroundColor(DEFAULT_TOOLBAR_BACKGROUND_COLOR);
         int padH = dpToPx(4f);
-        int padV = dpToPx(3f);
+        int padV = dpToPx(4f);
         setPadding(padH, padV, padH, padV);
 
         setLongPressTimeout(ViewConfiguration.getLongPressTimeout());
@@ -330,7 +330,7 @@ public final class ExtraKeysView extends GridLayout {
         button.setMinimumHeight(0);
         button.setMaxLines(1);
         button.setIncludeFontPadding(false);
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, compactRow ? 12.5f : 13.5f);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, compactRow ? 13.5f : 14.5f);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         button.setCornerRadius(dpToPx(10f));
         button.setStrokeWidth(dpToPx(1f));
@@ -543,8 +543,8 @@ public final class ExtraKeysView extends GridLayout {
         setColumnCount(maximumLength(buttons));
 
         final boolean compactRow = buttons.length >= 2;
-        final int marginH = dpToPx(3f);
-        final int marginV = dpToPx(compactRow ? 2.5f : 3f);
+        final int marginH = dpToPx(4f);
+        final int marginV = dpToPx(compactRow ? 3f : 4f);
 
         for (int row = 0; row < buttons.length; row++) {
             for (int col = 0; col < buttons[row].length; col++) {

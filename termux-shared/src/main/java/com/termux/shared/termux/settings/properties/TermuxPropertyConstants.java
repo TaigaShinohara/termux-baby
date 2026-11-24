@@ -194,7 +194,10 @@ public final class TermuxPropertyConstants {
     public static final String KEY_TERMINAL_CURSOR_BLINK_RATE =  "terminal-cursor-blink-rate"; // Default: "terminal-cursor-blink-rate"
     public static final int IVALUE_TERMINAL_CURSOR_BLINK_RATE_MIN = TerminalView.TERMINAL_CURSOR_BLINK_RATE_MIN;
     public static final int IVALUE_TERMINAL_CURSOR_BLINK_RATE_MAX = TerminalView.TERMINAL_CURSOR_BLINK_RATE_MAX;
-    public static final int DEFAULT_IVALUE_TERMINAL_CURSOR_BLINK_RATE = 0;
+    // Termux Baby: gentle 800ms blink by default (upstream default 0 = steady) so
+    // the prompt cursor is easy to spot on a phone screen. Users can override
+    // via termux.properties (0 restores the steady cursor).
+    public static final int DEFAULT_IVALUE_TERMINAL_CURSOR_BLINK_RATE = 800;
 
 
 
@@ -245,7 +248,9 @@ public final class TermuxPropertyConstants {
     public static final String KEY_TERMINAL_MARGIN_VERTICAL =  "terminal-margin-vertical"; // Default: "terminal-margin-vertical"
     public static final int IVALUE_TERMINAL_MARGIN_VERTICAL_MIN = 0;
     public static final int IVALUE_TERMINAL_MARGIN_VERTICAL_MAX = 100;
-    public static final int DEFAULT_IVALUE_TERMINAL_MARGIN_VERTICAL = 0;
+    // Termux Baby: 4dp top/bottom margin (upstream default 0) so the first and
+    // last lines do not hug the edges of the phone screen in Pro mode.
+    public static final int DEFAULT_IVALUE_TERMINAL_MARGIN_VERTICAL = 4;
 
 
 

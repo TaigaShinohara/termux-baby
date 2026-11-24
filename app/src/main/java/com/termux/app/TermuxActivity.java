@@ -629,9 +629,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // Comfortable 1-row touch strip (~48dp from layout_height)
             baseHeightPx = mTerminalToolbarDefaultHeight;
         } else {
-            // Spacious multi-row layout (~43dp per row, ~86dp for 2 rows)
+            // Spacious multi-row layout (48dp per row = Material minimum touch
+            // target, ~96dp for 2 rows) so extra keys stay easy to tap on phones
             float multiRowHeightPx = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, 43f, getResources().getDisplayMetrics());
+                TypedValue.COMPLEX_UNIT_DIP, 48f, getResources().getDisplayMetrics());
             baseHeightPx = multiRowHeightPx * rowCount;
         }
 
