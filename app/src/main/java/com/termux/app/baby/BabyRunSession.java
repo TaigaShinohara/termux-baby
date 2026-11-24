@@ -48,16 +48,19 @@ public final class BabyRunSession {
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final StringBuilder outputBuffer = new StringBuilder();
 
+    // Volatile: callbacks are main-thread today only because the production
+    // executor dispatches there; these fields must stay safe even if a
+    // future executor delivers from a background thread.
     @NonNull
-    private State state = State.RUNNING;
+    private volatile State state = State.RUNNING;
     @Nullable
-    private String lastLine;
+    private volatile String lastLine;
     @Nullable
-    private BabyCommandExecutor.ExecutionResult result;
+    private volatile BabyCommandExecutor.ExecutionResult result;
     @Nullable
-    private BabyCommandExecutor.ExecutionHandle handle;
-    private boolean finishedSeen;
-    private boolean completionHandled;
+    private volatile BabyCommandExecutor.ExecutionHandle handle;
+    private volatile boolean finishedSeen;
+    private volatile boolean completionHandled;
 
     BabyRunSession(
         long id,

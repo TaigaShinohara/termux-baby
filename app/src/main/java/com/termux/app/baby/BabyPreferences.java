@@ -9,6 +9,13 @@ import androidx.annotation.Nullable;
 
 /**
  * Persistent preferences for Termux Baby mode, onboarding state, and beginner guidance.
+ *
+ * <p>All setters use {@code commit()}, not {@code apply()}: these flags are
+ * one-way transitions (mode switch, onboarding done, first action done) and
+ * losing one to a process kill right after the write would re-onboard the
+ * user or resurrect the previous mode. The file is tiny, so the synchronous
+ * write is cheap. This class is also the ONLY access point for the
+ * {@code termux_baby_prefs} file — never open it by name elsewhere.
  */
 public final class BabyPreferences {
 
@@ -19,6 +26,7 @@ public final class BabyPreferences {
     private static final String KEY_ONBOARDING_GOAL = "onboarding_goal";
     private static final String KEY_FIRST_ACTION_COMPLETED = "first_action_completed";
     private static final String KEY_EXTRA_KEYS_PRESET = "extra_keys_preset";
+    private static final String KEY_HUSHLOGIN_INITIALIZED = "hushlogin_initialized";
 
     /** Extra keys preset: plain 2-row × 7 control panel — control keys and arrows (default). */
     public static final String EXTRA_KEYS_PRESET_SIMPLE = "simple";
@@ -49,7 +57,7 @@ public final class BabyPreferences {
 
     /** Sets whether Baby Mode (Easy Home) is active. */
     public static void setBabyMode(@NonNull Context context, boolean enabled) {
-        getPrefs(context).edit().putBoolean(KEY_BABY_MODE_ENABLED, enabled).apply();
+        getPrefs(context).edit().putBoolean(KEY_BABY_MODE_ENABLED, enabled).commit();
     }
 
     /** Returns true if the user has completed or skipped first-run onboarding. */
@@ -59,14 +67,14 @@ public final class BabyPreferences {
 
     /** Marks first-run onboarding as completed (or not completed). */
     public static void setOnboardingCompleted(@NonNull Context context, boolean completed) {
-        getPrefs(context).edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply();
+        getPrefs(context).edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).commit();
     }
 
     /** Resets onboarding completion so it can be viewed again from Settings. */
     public static void resetOnboarding(@NonNull Context context) {
         getPrefs(context).edit()
             .putBoolean(KEY_ONBOARDING_COMPLETED, false)
-            .apply();
+            .commit();
     }
 
     /** Returns the user's selected onboarding goal, or {@link #GOAL_EXPLORE} if unset. */
@@ -78,7 +86,7 @@ public final class BabyPreferences {
 
     /** Saves the user's selected onboarding goal (use GOAL_* constants). */
     public static void setOnboardingGoal(@NonNull Context context, @NonNull String goal) {
-        getPrefs(context).edit().putString(KEY_ONBOARDING_GOAL, goal).apply();
+        getPrefs(context).edit().putString(KEY_ONBOARDING_GOAL, goal).commit();
     }
 
     /** Returns true once the user has successfully completed at least one Baby Mode action. */
@@ -88,7 +96,7 @@ public final class BabyPreferences {
 
     /** Marks that the user has completed their first Baby Mode action. */
     public static void setFirstActionCompleted(@NonNull Context context, boolean completed) {
-        getPrefs(context).edit().putBoolean(KEY_FIRST_ACTION_COMPLETED, completed).apply();
+        getPrefs(context).edit().putBoolean(KEY_FIRST_ACTION_COMPLETED, completed).commit();
     }
 
     /**
@@ -103,7 +111,7 @@ public final class BabyPreferences {
 
     /** Saves the selected Extra Keys layout preset. Unknown values fall back to {@link #EXTRA_KEYS_PRESET_SIMPLE}. */
     public static void setExtraKeysPreset(@NonNull Context context, @Nullable String preset) {
-        getPrefs(context).edit().putString(KEY_EXTRA_KEYS_PRESET, normalizeExtraKeysPreset(preset)).apply();
+        getPrefs(context).edit().putString(KEY_EXTRA_KEYS_PRESET, normalizeExtraKeysPreset(preset)).commit();
     }
 
     /** Normalizes any preset string to a valid preset constant, defaulting to {@link #EXTRA_KEYS_PRESET_SIMPLE}. */
@@ -135,6 +143,16 @@ public final class BabyPreferences {
         } else {
             return BabyActionCatalog.ACTION_SEE_FILES;
         }
+    }
+
+    /** Returns true once ~/.hushlogin has been created successfully. */
+    public static boolean isHushLoginInitialized(@NonNull Context context) {
+        return getPrefs(context).getBoolean(KEY_HUSHLOGIN_INITIALIZED, false);
+    }
+
+    /** Records that ~/.hushlogin creation succeeded (call only on success). */
+    public static void setHushLoginInitialized(@NonNull Context context, boolean initialized) {
+        getPrefs(context).edit().putBoolean(KEY_HUSHLOGIN_INITIALIZED, initialized).commit();
     }
 
     /**

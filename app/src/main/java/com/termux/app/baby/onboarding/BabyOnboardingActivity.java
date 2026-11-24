@@ -63,6 +63,7 @@ public class BabyOnboardingActivity extends AppCompatActivity
     @NonNull
     private String mSelectedGoal = BabyPreferences.GOAL_EXPLORE;
     private boolean mHasUserSelectedGoal = false;
+    private boolean mWasAlreadyCompleted = false;
     private boolean mIsFinishingOnboarding = false;
     private boolean mLaunchTermuxOnFinish = false;
 
@@ -99,6 +100,7 @@ public class BabyOnboardingActivity extends AppCompatActivity
         configureSystemBarsAppearance();
 
         mLaunchTermuxOnFinish = getIntent().getBooleanExtra(EXTRA_LAUNCH_TERMUX_ON_FINISH, false);
+        mWasAlreadyCompleted = BabyPreferences.isOnboardingCompleted(this);
 
         if (savedInstanceState != null) {
             mCurrentPage = savedInstanceState.getInt(STATE_CURRENT_PAGE, BabyOnboardingPagerAdapter.PAGE_HOOK);
@@ -269,9 +271,19 @@ public class BabyOnboardingActivity extends AppCompatActivity
         if (mIsFinishingOnboarding) return;
         mIsFinishingOnboarding = true;
 
-        BabyPreferences.setOnboardingGoal(this, mSelectedGoal);
+        // Only write the goal when the user actually picked one in this
+        // run — it is already persisted at pick time, and writing the
+        // in-memory default here would clobber a previously saved goal
+        // when onboarding is skipped or replayed.
+        if (mHasUserSelectedGoal) {
+            BabyPreferences.setOnboardingGoal(this, mSelectedGoal);
+        }
         BabyPreferences.setOnboardingCompleted(this, true);
-        BabyPreferences.setBabyMode(this, true);
+        // First run lands in Baby Mode; a replay from Settings must not
+        // force a Pro-mode user back into Baby Mode.
+        if (!mWasAlreadyCompleted) {
+            BabyPreferences.setBabyMode(this, true);
+        }
 
         setResult(RESULT_OK);
 

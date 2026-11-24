@@ -139,6 +139,12 @@
     <string name="baby_session_bar_done">Done</string>
     <string name="baby_session_bar_failed">Stopped</string>
     <string name="baby_session_bar_terminal">Terminal</string>
+    <string name="baby_session_bar_close">Close session</string>
+    <string name="baby_session_close_title">Close this session?</string>
+    <string name="baby_session_close_terminal_message">Anything running in this terminal will stop.</string>
+    <string name="baby_session_close_last_message">This is the last session. Closing it will exit the app.</string>
+    <string name="baby_session_close_run_message">"%1$s" is still running and will be stopped.</string>
+    <string name="baby_session_close_button">Close</string>
 
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">Friendly language for learning coding &amp; scripts</string>

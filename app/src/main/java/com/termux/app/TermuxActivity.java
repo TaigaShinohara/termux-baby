@@ -220,9 +220,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mIsBootstrapSetupRunning = false;
     @Nullable
     private String mPendingProCommand;
+    private long mPendingProCommandAtMs;
 
-    private static final String BABY_PREFS_NAME = "termux_baby_prefs";
-    private static final String KEY_HUSHLOGIN_INITIALIZED = "hushlogin_initialized";
+    /**
+     * A parked Pro command ("Open" tapped before any session existed) is only
+     * valid briefly: after this window it is dropped instead of being typed
+     * into whatever session happens to be current much later.
+     */
+    private static final long PENDING_PRO_COMMAND_EXPIRY_MS = 60_000;
+    private static final String ARG_PENDING_PRO_COMMAND = "pending_pro_command";
+    private static final String ARG_PENDING_PRO_COMMAND_AT = "pending_pro_command_at";
 
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
@@ -248,8 +255,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logDebug(LOG_TAG, "onCreate");
         mIsOnResumeAfterOnCreate = true;
 
-        if (savedInstanceState != null)
+        if (savedInstanceState != null) {
             mIsActivityRecreated = savedInstanceState.getBoolean(ARG_ACTIVITY_RECREATED, false);
+            // Restore a parked Pro command across recreation (with its
+            // original timestamp, so the expiry still applies).
+            mPendingProCommand = savedInstanceState.getString(ARG_PENDING_PRO_COMMAND, null);
+            mPendingProCommandAtMs = savedInstanceState.getLong(ARG_PENDING_PRO_COMMAND_AT, 0);
+        }
 
         // Delete ReportInfo serialized object files from cache older than 14 days
         ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false);
@@ -471,6 +483,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         super.onSaveInstanceState(savedInstanceState);
         saveTerminalToolbarTextInput(savedInstanceState);
         savedInstanceState.putBoolean(ARG_ACTIVITY_RECREATED, true);
+        if (mPendingProCommand != null) {
+            savedInstanceState.putString(ARG_PENDING_PRO_COMMAND, mPendingProCommand);
+            savedInstanceState.putLong(ARG_PENDING_PRO_COMMAND_AT, mPendingProCommandAtMs);
+        }
     }
 
 
@@ -780,8 +796,56 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * currently on screen is skipped — the bar is for what is running
      * elsewhere. A cheap signature check avoids rebuilding on every poll.
      */
+    /**
+     * Closing a terminal session from the bar kills its shell instantly, so
+     * it always asks first — an agent running in that terminal would
+     * otherwise be destroyed by a tidy-up tap. Closing the last session also
+     * exits the app (stock Termux behavior), which the message calls out.
+     */
+    private void confirmCloseTerminalSession(@NonNull TerminalSession terminalSession) {
+        if (mTermuxService == null) return;
+        boolean isLast = mTermuxService.getTermuxSessions().size() <= 1;
+        String message = getString(R.string.baby_session_close_terminal_message);
+        if (isLast) {
+            message += "\n" + getString(R.string.baby_session_close_last_message);
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.baby_session_close_title)
+            .setMessage(message)
+            .setNegativeButton(R.string.baby_install_confirm_cancel, null)
+            .setPositiveButton(R.string.baby_session_close_button, (dialog, which) -> {
+                if (mTermuxService != null) {
+                    mTermuxService.removeTermuxSession(terminalSession);
+                }
+                mSessionBarSignature = null;
+                refreshSessionBar();
+            })
+            .show();
+    }
+
+    /** Asks before the bar's close button stops a still-running Baby run. */
+    private void confirmCloseRunSession(@NonNull BabyRunSession runSession) {
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.baby_session_close_title)
+            .setMessage(getString(R.string.baby_session_close_run_message, runSession.title))
+            .setNegativeButton(R.string.baby_install_confirm_cancel, null)
+            .setPositiveButton(R.string.baby_session_close_button, (dialog, which) -> {
+                if (mBabyModeController != null) {
+                    mBabyModeController.dismissRunSession(runSession);
+                }
+                refreshSessionBar();
+            })
+            .show();
+    }
+
     private void refreshSessionBar() {
         if (mSessionBar == null || mSessionBarChips == null) return;
+
+        if (mBabyModeController != null) {
+            // Finished sessions the user already saw (e.g. watched to
+            // completion in the runner sheet) leave the bar here.
+            mBabyModeController.getRunSessionRegistry().pruneSeenFinishedQuietly();
+        }
 
         java.util.List<BabyRunSession> runSessions = mBabyModeController != null
             ? mBabyModeController.getRunSessionRegistry().getSessions()
@@ -837,6 +901,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     mBabyModeController.openRunSession(runSession);
                 }
             });
+            View runClose = chip.findViewById(R.id.chip_close);
+            runClose.setOnClickListener(v -> {
+                if (runSession.isRunning()) {
+                    confirmCloseRunSession(runSession);
+                } else if (mBabyModeController != null) {
+                    mBabyModeController.dismissRunSession(runSession);
+                    refreshSessionBar();
+                }
+            });
             mSessionBarChips.addView(chip);
         }
 
@@ -857,11 +930,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             state.setText(R.string.baby_session_bar_running);
             chip.setContentDescription(title.getText() + ". " + state.getText());
             chip.setOnClickListener(v -> {
+                clearPendingProCommand();
                 if (mTermuxTerminalSessionActivityClient != null) {
                     mTermuxTerminalSessionActivityClient.setCurrentSession(terminalSession);
                 }
                 switchToProMode(null);
             });
+            View termClose = chip.findViewById(R.id.chip_close);
+            termClose.setOnClickListener(v -> confirmCloseTerminalSession(terminalSession));
             mSessionBarChips.addView(chip);
         }
 
@@ -873,6 +949,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void switchToBabyMode() {
+        clearPendingProCommand();
         BabyPreferences.setBabyMode(this, true);
         applyModeUi(true, false);
     }
@@ -1051,18 +1128,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void ensureHushLoginOnce() {
         try {
-            SharedPreferences prefs = getApplicationContext().getSharedPreferences(BABY_PREFS_NAME, Context.MODE_PRIVATE);
-            if (prefs.getBoolean(KEY_HUSHLOGIN_INITIALIZED, false)) {
+            if (BabyPreferences.isHushLoginInitialized(getApplicationContext())) {
                 return;
             }
             File homeDir = TermuxConstants.TERMUX_HOME_DIR;
             if (homeDir != null && (homeDir.isDirectory() || homeDir.mkdirs())) {
                 File hushLogin = new File(homeDir, ".hushlogin");
-                if (!hushLogin.exists()) {
-                    //noinspection ResultOfMethodCallIgnored
-                    hushLogin.createNewFile();
+                // Only record success when the file is actually there;
+                // flagging a failed creation would disable retry forever
+                // and the login banner would keep appearing.
+                boolean created = hushLogin.exists() || hushLogin.createNewFile();
+                if (created) {
+                    BabyPreferences.setHushLoginInitialized(getApplicationContext(), true);
                 }
-                prefs.edit().putBoolean(KEY_HUSHLOGIN_INITIALIZED, true).apply();
             }
         } catch (IOException | SecurityException e) {
             Logger.logDebug(LOG_TAG, "Skipping ~/.hushlogin initialization: " + e.getMessage());
@@ -1075,12 +1153,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             String line = command.endsWith("\n") ? command : command + "\n";
             session.write(line);
         } else {
+            // No session to receive it yet: park it briefly. It is flushed
+            // only by the bootstrap/service-connected paths that create the
+            // session it was meant for, and expires quickly (see
+            // flushPendingProCommand) so it can never be typed into an
+            // unrelated session much later.
             mPendingProCommand = command;
+            mPendingProCommandAtMs = System.currentTimeMillis();
         }
     }
 
     private void flushPendingProCommand() {
         if (mPendingProCommand == null) return;
+        if (System.currentTimeMillis() - mPendingProCommandAtMs > PENDING_PRO_COMMAND_EXPIRY_MS) {
+            mPendingProCommand = null;
+            return;
+        }
         TerminalSession session = getCurrentSession();
         if (session != null && session.isRunning()) {
             String cmd = mPendingProCommand;
@@ -1088,6 +1176,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             String line = cmd.endsWith("\n") ? cmd : cmd + "\n";
             session.write(line);
         }
+    }
+
+    /** Drops a parked Pro command (the user navigated somewhere themselves). */
+    private void clearPendingProCommand() {
+        mPendingProCommand = null;
     }
 
 

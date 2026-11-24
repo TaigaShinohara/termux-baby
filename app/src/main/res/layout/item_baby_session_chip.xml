@@ -50,4 +50,14 @@
         android:maxLines="1"
         android:textColor="@color/baby_text_secondary"
         android:textSize="12sp" />
+
+    <ImageView
+        android:id="@+id/chip_close"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginStart="4dp"
+        android:contentDescription="@string/baby_session_bar_close"
+        android:padding="7dp"
+        android:src="@drawable/ic_baby_close"
+        app:tint="@color/baby_text_secondary" />
 </LinearLayout>

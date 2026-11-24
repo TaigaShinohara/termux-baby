@@ -306,6 +306,11 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
     private void renderResult(@NonNull BabyCommandExecutor.ExecutionResult result) {
         BabyRunSession current = session;
+        if (current != null) {
+            // The user is looking at the finished result right now, so the
+            // session bar must not keep a stale "finished" chip for it.
+            current.markFinishedSeen();
+        }
         BabyAction.OutputFormat format = current != null ? current.outputFormat : BabyAction.OutputFormat.GENERIC;
         String displayName = current != null ? current.displayName : null;
 

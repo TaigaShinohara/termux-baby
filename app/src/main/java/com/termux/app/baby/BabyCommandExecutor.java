@@ -13,11 +13,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Safely executes beginner-friendly shell commands asynchronously using Termux's $PREFIX/bin/sh,
@@ -105,7 +108,7 @@ public final class BabyCommandExecutor {
         void attachProcess(@NonNull Process process) {
             this.process = process;
             if (cancelled.get()) {
-                destroyProcessQuietly(process);
+                destroyProcessTree(process);
             }
         }
 
@@ -117,23 +120,98 @@ public final class BabyCommandExecutor {
             if (cancelled.compareAndSet(false, true)) {
                 Process p = this.process;
                 if (p != null) {
-                    destroyProcessQuietly(p);
+                    destroyProcessTree(p);
                 }
             }
         }
+    }
 
-        private static void destroyProcessQuietly(@NonNull Process p) {
+    /**
+     * Kills a process and its whole descendant tree. Killing only the
+     * {@code sh -c} wrapper leaves children (pkg, npm, node…) alive: they keep
+     * the dpkg/apt lock, so the next install fails, and they keep the output
+     * pipes open, so the reader threads block forever. Descendants are found
+     * by scanning /proc (same-UID children are readable) and SIGKILLed first,
+     * then the wrapper itself is destroyed.
+     */
+    static void destroyProcessTree(@NonNull Process process) {
+        try {
+            int pid = pidOf(process);
+            if (pid > 0) {
+                for (int descendant : collectDescendantPids(pid)) {
+                    try {
+                        android.os.Process.sendSignal(descendant, 9 /* SIGKILL */);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            process.destroy();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static int pidOf(@NonNull Process process) {
+        try {
+            java.lang.reflect.Field pidField = process.getClass().getDeclaredField("pid");
+            pidField.setAccessible(true);
+            return pidField.getInt(process);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    @NonNull
+    private static java.util.List<Integer> collectDescendantPids(int rootPid) {
+        java.util.Map<Integer, java.util.List<Integer>> childrenByParent = new java.util.HashMap<>();
+        File proc = new File("/proc");
+        File[] entries = proc.listFiles();
+        if (entries == null) return java.util.Collections.emptyList();
+        for (File entry : entries) {
+            String name = entry.getName();
+            if (name.isEmpty() || !Character.isDigit(name.charAt(0))) continue;
             try {
-                p.destroy();
+                String stat = new String(
+                    Files.readAllBytes(new File(entry, "stat").toPath()), StandardCharsets.UTF_8);
+                int closeParen = stat.lastIndexOf(')');
+                if (closeParen < 0) continue;
+                String[] fields = stat.substring(closeParen + 2).split(" ");
+                // After "(comm)": fields[0]=state, fields[1]=ppid.
+                int ppid = Integer.parseInt(fields[1]);
+                int pid = Integer.parseInt(name);
+                childrenByParent.computeIfAbsent(ppid, k -> new ArrayList<>()).add(pid);
             } catch (Exception ignored) {
+                // Unreadable or already gone — skip.
             }
         }
+        java.util.List<Integer> descendants = new ArrayList<>();
+        java.util.Deque<Integer> stack = new java.util.ArrayDeque<>();
+        stack.push(rootPid);
+        while (!stack.isEmpty()) {
+            java.util.List<Integer> children = childrenByParent.get(stack.pop());
+            if (children == null) continue;
+            for (int child : children) {
+                descendants.add(child);
+                stack.push(child);
+            }
+        }
+        return descendants;
     }
 
     private final ExecutorService executor;
     private final Handler mainHandler;
     private final File prefixDir;
     private final File homeDir;
+
+    /**
+     * Serializes executions: package operations (pkg/dpkg/npm) corrupt or
+     * lock each other out when two trees run at once, so Baby runs execute
+     * strictly one at a time, in submission order. A queued run's timeout
+     * clock only starts once it actually begins.
+     */
+    private final ReentrantLock executionLock = new ReentrantLock(true);
 
     public BabyCommandExecutor() {
         this(
@@ -165,6 +243,11 @@ public final class BabyCommandExecutor {
     public boolean isBootstrapReady() {
         File sh = new File(new File(prefixDir, "bin"), "sh");
         return sh.exists() && sh.canExecute();
+    }
+
+    /** True while the $PREFIX directory itself still exists on disk. */
+    public boolean isPrefixPresent() {
+        return prefixDir.isDirectory();
     }
 
     /**
@@ -203,6 +286,30 @@ public final class BabyCommandExecutor {
      */
     @NonNull
     public ExecutionResult executeBlocking(
+        @NonNull String command,
+        int timeoutSeconds,
+        @NonNull ExecutionHandle handle,
+        @Nullable Callback liveCallback
+    ) {
+        long queueStartMs = System.currentTimeMillis();
+        try {
+            executionLock.lockInterruptibly();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ExecutionResult(
+                command, 130, "", "", false, true, false,
+                System.currentTimeMillis() - queueStartMs
+            );
+        }
+        try {
+            return executeBlockingLocked(command, timeoutSeconds, handle, liveCallback);
+        } finally {
+            executionLock.unlock();
+        }
+    }
+
+    @NonNull
+    private ExecutionResult executeBlockingLocked(
         @NonNull String command,
         int timeoutSeconds,
         @NonNull ExecutionHandle handle,
@@ -259,6 +366,7 @@ public final class BabyCommandExecutor {
 
         StringBuilder stdoutBuilder = new StringBuilder();
         StringBuilder stderrBuilder = new StringBuilder();
+        LineDispatcher dispatcher = liveCallback != null ? new LineDispatcher(liveCallback) : null;
 
         Process process = null;
         try {
@@ -267,24 +375,29 @@ public final class BabyCommandExecutor {
 
             final Process runningProcess = process;
             Thread stdoutReader = new Thread(() -> readStream(
-                runningProcess.getInputStream(), stdoutBuilder, liveCallback
+                runningProcess.getInputStream(), stdoutBuilder, dispatcher
             ), "baby-cmd-stdout");
             Thread stderrReader = new Thread(() -> readStream(
-                runningProcess.getErrorStream(), stderrBuilder, liveCallback
+                runningProcess.getErrorStream(), stderrBuilder, dispatcher
             ), "baby-cmd-stderr");
             stdoutReader.start();
             stderrReader.start();
 
             boolean finished = waitForProcess(process, timeoutSeconds, handle);
             if (!finished) {
-                process.destroy();
-                stdoutReader.join(500);
-                stderrReader.join(500);
+                // Cancelled or timed out: kill the whole tree and close the
+                // pipes so the reader threads can actually exit.
+                destroyProcessTree(process);
+                closeQuietly(process.getInputStream());
+                closeQuietly(process.getErrorStream());
+                stdoutReader.join(2000);
+                stderrReader.join(2000);
+                if (dispatcher != null) dispatcher.flushNow();
                 return new ExecutionResult(
                     command,
                     handle.isCancelled() ? 130 : 124,
-                    stdoutBuilder.toString().trim(),
-                    stderrBuilder.toString().trim(),
+                    snapshot(stdoutBuilder),
+                    snapshot(stderrBuilder),
                     !handle.isCancelled(),
                     handle.isCancelled(),
                     false,
@@ -294,12 +407,21 @@ public final class BabyCommandExecutor {
 
             stdoutReader.join(2000);
             stderrReader.join(2000);
+            if (stdoutReader.isAlive() || stderrReader.isAlive()) {
+                // A grandchild inherited the pipes and is holding them open;
+                // cut the streams so the readers stop instead of leaking.
+                closeQuietly(process.getInputStream());
+                closeQuietly(process.getErrorStream());
+                stdoutReader.join(500);
+                stderrReader.join(500);
+            }
+            if (dispatcher != null) dispatcher.flushNow();
             int exitCode = process.exitValue();
             return new ExecutionResult(
                 command,
                 exitCode,
-                stdoutBuilder.toString().trim(),
-                stderrBuilder.toString().trim(),
+                snapshot(stdoutBuilder),
+                snapshot(stderrBuilder),
                 false,
                 handle.isCancelled(),
                 false,
@@ -309,7 +431,7 @@ public final class BabyCommandExecutor {
             return new ExecutionResult(
                 command,
                 1,
-                stdoutBuilder.toString().trim(),
+                snapshot(stdoutBuilder),
                 e.getMessage() != null ? e.getMessage() : "IO error",
                 false,
                 handle.isCancelled(),
@@ -319,18 +441,93 @@ public final class BabyCommandExecutor {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (process != null) {
-                process.destroy();
+                destroyProcessTree(process);
             }
             return new ExecutionResult(
                 command,
                 130,
-                stdoutBuilder.toString().trim(),
-                stderrBuilder.toString().trim(),
+                snapshot(stdoutBuilder),
+                snapshot(stderrBuilder),
                 false,
                 true,
                 false,
                 System.currentTimeMillis() - startMs
             );
+        }
+    }
+
+    /** Thread-safe snapshot: reader threads may still be appending. */
+    @NonNull
+    private static String snapshot(@NonNull StringBuilder builder) {
+        synchronized (builder) {
+            return builder.toString().trim();
+        }
+    }
+
+    private static void closeQuietly(@Nullable java.io.Closeable closeable) {
+        if (closeable == null) return;
+        try {
+            closeable.close();
+        } catch (IOException ignored) {
+        }
+    }
+
+    /**
+     * Coalesces live output lines before they reach the main thread: a chatty
+     * command (pkg progress output) would otherwise flood the main looper
+     * with one runnable per line. Lines are flushed in batches every
+     * ~120 ms; {@link #flushNow()} runs before completion is delivered so
+     * lines never arrive after the result. Without a main handler (tests),
+     * lines are delivered synchronously.
+     */
+    private final class LineDispatcher {
+        private static final long FLUSH_DELAY_MS = 120;
+
+        private final Callback callback;
+        private final java.util.List<String> pending = new ArrayList<>();
+        private boolean flushScheduled;
+
+        LineDispatcher(@NonNull Callback callback) {
+            this.callback = callback;
+        }
+
+        void offer(@NonNull String line) {
+            if (mainHandler == null) {
+                callback.onOutputLine(line);
+                return;
+            }
+            synchronized (pending) {
+                pending.add(line);
+                if (flushScheduled) return;
+                flushScheduled = true;
+            }
+            mainHandler.postDelayed(this::flush, FLUSH_DELAY_MS);
+        }
+
+        void flushNow() {
+            if (mainHandler == null) {
+                flush();
+            } else {
+                // Posted before the completion runnable on the same looper,
+                // so buffered lines are delivered first (FIFO).
+                dispatchToMain(this::flush);
+            }
+        }
+
+        private void flush() {
+            java.util.List<String> batch;
+            synchronized (pending) {
+                if (pending.isEmpty()) {
+                    flushScheduled = false;
+                    return;
+                }
+                batch = new ArrayList<>(pending);
+                pending.clear();
+                flushScheduled = false;
+            }
+            for (String line : batch) {
+                callback.onOutputLine(line);
+            }
         }
     }
 
@@ -362,28 +559,30 @@ public final class BabyCommandExecutor {
     private void readStream(
         @NonNull java.io.InputStream stream,
         @NonNull StringBuilder out,
-        @Nullable Callback liveCallback
+        @Nullable LineDispatcher dispatcher
     ) {
         try (BufferedReader reader = new BufferedReader(
             new InputStreamReader(stream, StandardCharsets.UTF_8)
         )) {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (out.length() < MAX_OUTPUT_CHARS) {
-                    if (out.length() > 0) {
-                        out.append('\n');
-                    }
-                    int remaining = MAX_OUTPUT_CHARS - out.length();
-                    if (line.length() > remaining) {
-                        out.append(line, 0, remaining);
-                    } else {
-                        out.append(line);
+                synchronized (out) {
+                    if (out.length() < MAX_OUTPUT_CHARS) {
+                        if (out.length() > 0) {
+                            out.append('\n');
+                        }
+                        int remaining = MAX_OUTPUT_CHARS - out.length();
+                        if (line.length() > remaining) {
+                            out.append(line, 0, remaining);
+                        } else {
+                            out.append(line);
+                        }
                     }
                 }
-                if (liveCallback != null) {
+                if (dispatcher != null) {
                     final String cleanLine = BabyOutputFormatter.stripAnsi(line).trim();
                     if (!cleanLine.isEmpty()) {
-                        dispatchToMain(() -> liveCallback.onOutputLine(cleanLine));
+                        dispatcher.offer(cleanLine);
                     }
                 }
             }

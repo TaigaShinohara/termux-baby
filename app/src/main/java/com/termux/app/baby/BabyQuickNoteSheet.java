@@ -92,9 +92,17 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
             return;
         }
 
-        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        // Millisecond resolution plus an existence loop: two notes saved in
+        // the same second must never overwrite each other.
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date());
         String filename = "note_" + timestamp + ".txt";
         File noteFile = new File(notesDir, filename);
+        int suffix = 2;
+        while (noteFile.exists()) {
+            filename = "note_" + timestamp + "_" + suffix + ".txt";
+            noteFile = new File(notesDir, filename);
+            suffix++;
+        }
 
         try (OutputStreamWriter writer = new OutputStreamWriter(
             new FileOutputStream(noteFile), StandardCharsets.UTF_8
@@ -187,13 +195,17 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
             .show();
     }
 
+    /**
+     * Notes live in exactly one place: ~/notes (the UI shows that path, and
+     * the user can open the files from the terminal). Never fall back to a
+     * second directory — a transient mkdir failure would split the notes
+     * across two locations and the fallback ones would silently disappear
+     * from the recent list once $HOME works again. If the directory cannot
+     * be created, saving fails with a visible error instead.
+     */
     @NonNull
     private File resolveNotesDir() {
-        File termuxHome = TermuxConstants.TERMUX_HOME_DIR;
-        if (termuxHome.exists() || termuxHome.mkdirs()) {
-            return new File(termuxHome, "notes");
-        }
-        return new File(getContext().getFilesDir(), "notes");
+        return new File(TermuxConstants.TERMUX_HOME_DIR, "notes");
     }
 
     @NonNull

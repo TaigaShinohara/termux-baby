@@ -80,13 +80,19 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         private void configureTermuxBabyPreferences(@NonNull Context context) {
+            // BabyPreferences (termux_baby_prefs) is the single source of
+            // truth for these two settings. The change listeners therefore
+            // return false — returning true would make the AndroidX
+            // framework ALSO persist its own copy into the default
+            // SharedPreferences file, creating a second, diverging store —
+            // and update the widget state manually instead.
             SwitchPreferenceCompat defaultModePref = findPreference("baby_default_mode");
             if (defaultModePref != null) {
                 defaultModePref.setChecked(BabyPreferences.isBabyMode(context));
                 defaultModePref.setOnPreferenceChangeListener((preference, newValue) -> {
                     if (newValue instanceof Boolean) {
                         BabyPreferences.setBabyMode(context, (Boolean) newValue);
-                        return true;
+                        defaultModePref.setChecked((Boolean) newValue);
                     }
                     return false;
                 });
@@ -98,7 +104,7 @@ public class SettingsActivity extends AppCompatActivity {
                 extraKeysPresetPref.setOnPreferenceChangeListener((preference, newValue) -> {
                     if (newValue instanceof String) {
                         BabyPreferences.setExtraKeysPreset(context, (String) newValue);
-                        return true;
+                        extraKeysPresetPref.setValue((String) newValue);
                     }
                     return false;
                 });

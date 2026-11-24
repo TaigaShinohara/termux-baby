@@ -139,6 +139,12 @@
     <string name="baby_session_bar_done">おわった</string>
     <string name="baby_session_bar_failed">止まった</string>
     <string name="baby_session_bar_terminal">ターミナル</string>
+    <string name="baby_session_bar_close">セッションを閉じる</string>
+    <string name="baby_session_close_title">セッションを閉じますか？</string>
+    <string name="baby_session_close_terminal_message">このターミナルで動いている作業は止まります。</string>
+    <string name="baby_session_close_last_message">最後のセッションです。閉じるとアプリも終わります。</string>
+    <string name="baby_session_close_run_message">「%1$s」はまだ実行中です。止めて閉じます。</string>
+    <string name="baby_session_close_button">閉じる</string>
 
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">プログラミング学習や自動化に人気の言語</string>

@@ -108,7 +108,15 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
      * and updates the readiness badge.
      */
     public void refreshState() {
-        this.environmentReady = this.environmentReady || executor.isBootstrapReady();
+        if (executor.isBootstrapReady()) {
+            this.environmentReady = true;
+        } else if (this.environmentReady && !executor.isPrefixPresent()) {
+            // The environment was wiped while the app is running (the user
+            // removed $PREFIX in Pro mode, or a reset ran): stop claiming
+            // "ready" so the home returns to the preparing state instead of
+            // every card failing with bootstrap-missing errors.
+            this.environmentReady = false;
+        }
         bindCards();
         updateStatusBadge();
     }
@@ -360,6 +368,17 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         BabyCommandRunnerSheet sheet = createRunnerSheet();
         activeSheet = sheet;
         sheet.bindSession(session);
+    }
+
+    /**
+     * Closes a run session from the session bar: a running session is cancelled
+     * first, then the session leaves the registry (and the bar) immediately.
+     */
+    public void dismissRunSession(@NonNull BabyRunSession session) {
+        if (session.isRunning()) {
+            session.cancel();
+        }
+        runSessionRegistry.remove(session);
     }
 
     private void handleRunSessionCompletions() {

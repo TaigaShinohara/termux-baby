@@ -19,6 +19,12 @@ public final class BabyRunSessionRegistry {
         void onSessionsChanged();
     }
 
+    /** Finished sessions kept for the bar; older ones are pruned on create. */
+    private static final int MAX_FINISHED_RETAINED = 5;
+
+    // Guarded by synchronized blocks on `sessions` itself: callbacks are
+    // main-thread by construction today, but the registry must not silently
+    // corrupt if that ever changes.
     private final List<BabyRunSession> sessions = new ArrayList<>();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private long nextId = 1;
@@ -54,17 +60,25 @@ public final class BabyRunSessionRegistry {
         int timeoutSeconds,
         @Nullable String displayName
     ) {
-        BabyRunSession session = new BabyRunSession(
-            nextId++, title, iconResId, command, outputFormat, timeoutSeconds, displayName
-        );
-        session.addListener(sessionForwarder);
-        sessions.add(session);
+        BabyRunSession session;
+        synchronized (sessions) {
+            session = new BabyRunSession(
+                nextId++, title, iconResId, command, outputFormat, timeoutSeconds, displayName
+            );
+            session.addListener(sessionForwarder);
+            sessions.add(session);
+            pruneLocked();
+        }
         notifyChanged();
         return session;
     }
 
     public void remove(@NonNull BabyRunSession session) {
-        if (sessions.remove(session)) {
+        boolean removed;
+        synchronized (sessions) {
+            removed = sessions.remove(session);
+        }
+        if (removed) {
             session.removeListener(sessionForwarder);
             notifyChanged();
         }
@@ -72,6 +86,28 @@ public final class BabyRunSessionRegistry {
 
     /** Drops finished sessions the user has already seen; running ones stay. */
     public void pruneSeenFinished() {
+        if (pruneSeenFinishedQuietly()) {
+            notifyChanged();
+        }
+    }
+
+    /**
+     * Same pruning without the change notification — for callers that are
+     * already rebuilding their view in the same pass. Returns true if
+     * anything was removed.
+     */
+    public boolean pruneSeenFinishedQuietly() {
+        synchronized (sessions) {
+            return pruneLocked();
+        }
+    }
+
+    /**
+     * Bounds registry growth: seen finished sessions go first, then the
+     * oldest finished ones beyond {@link #MAX_FINISHED_RETAINED} (each can
+     * hold ~192 KB of output). Caller must hold the sessions lock.
+     */
+    private boolean pruneLocked() {
         boolean changed = false;
         for (int i = sessions.size() - 1; i >= 0; i--) {
             BabyRunSession session = sessions.get(i);
@@ -81,19 +117,35 @@ public final class BabyRunSessionRegistry {
                 changed = true;
             }
         }
-        if (changed) {
-            notifyChanged();
+        int finishedCount = 0;
+        for (BabyRunSession session : sessions) {
+            if (!session.isRunning()) finishedCount++;
         }
+        for (int i = 0; i < sessions.size() && finishedCount > MAX_FINISHED_RETAINED; i++) {
+            BabyRunSession session = sessions.get(i);
+            if (!session.isRunning()) {
+                sessions.remove(i);
+                session.removeListener(sessionForwarder);
+                finishedCount--;
+                changed = true;
+                i--;
+            }
+        }
+        return changed;
     }
 
     @NonNull
     public List<BabyRunSession> getSessions() {
-        return Collections.unmodifiableList(new ArrayList<>(sessions));
+        synchronized (sessions) {
+            return Collections.unmodifiableList(new ArrayList<>(sessions));
+        }
     }
 
     public boolean hasRunning() {
-        for (BabyRunSession session : sessions) {
-            if (session.isRunning()) return true;
+        synchronized (sessions) {
+            for (BabyRunSession session : sessions) {
+                if (session.isRunning()) return true;
+            }
         }
         return false;
     }
