@@ -86,10 +86,12 @@
             app:tint="@color/baby_text_secondary" />
     </LinearLayout>
 
-    <!-- Session bar (Apple Music mini-player style): pinned to the TOP of the
-         screen, always visible while a Baby run or a terminal session is alive
-         in the background. One chip per session; tapping a chip jumps back to
-         that session, the chip's close button ends it. -->
+    <!-- Session bar: visible while a Baby run or a terminal session is
+         alive. One chip per session; tapping a chip jumps back to that
+         session, the chip's close button ends it. Declared here as a strip
+         under the top bar (Easy Mode); in Pro Mode TermuxActivity moves it
+         into the content container, floating at the top start on the same
+         line as the mode pill. -->
     <HorizontalScrollView
         android:id="@+id/baby_session_bar"
         android:layout_width="match_parent"

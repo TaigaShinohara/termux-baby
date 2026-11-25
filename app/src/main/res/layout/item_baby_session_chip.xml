@@ -51,6 +51,17 @@
         android:textColor="@color/baby_text_secondary"
         android:textSize="12sp" />
 
+    <!-- Live indicator: gently pulses while the session behind this chip
+         is alive (terminal sessions). Run sessions use the spinner instead. -->
+    <View
+        android:id="@+id/chip_dot"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_marginStart="7dp"
+        android:background="@drawable/baby_pulse_dot"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/chip_close"
         android:layout_width="30dp"

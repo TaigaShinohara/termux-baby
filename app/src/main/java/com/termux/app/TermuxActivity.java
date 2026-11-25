@@ -1,5 +1,7 @@
 package com.termux.app;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
@@ -11,6 +13,7 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -28,6 +31,7 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -799,13 +803,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
-     * Rebuilds the session bar chips from the two session sources: Baby run
-     * sessions (installs and card actions tracked by the controller registry)
-     * and live terminal sessions from TermuxService. In Pro mode the session
-     * currently on screen is skipped — the bar is for what is running
-     * elsewhere. A cheap signature check avoids rebuilding on every poll.
-     */
-    /**
      * Closing a terminal session from the bar kills its shell instantly, so
      * it always asks first — an agent running in that terminal would
      * otherwise be destroyed by a tidy-up tap. Closing the last session also
@@ -847,6 +844,82 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             .show();
     }
 
+    /**
+     * Places the session bar where the current mode expects it. In Easy mode
+     * it is a strip in the root column, directly under the top bar. In Pro
+     * mode the top bar is gone, so as a strip it would sit detached at the
+     * very top of the screen; instead it floats over the terminal's top
+     * start, on the same line as the mode pill at the top end, with a
+     * transparent background (the chips carry their own pill background).
+     * The end margin keeps chips from sliding under the pill.
+     */
+    static void placeSessionBarForMode(@NonNull View sessionBar, @Nullable View topBar,
+                                       @Nullable ViewGroup proContainer, boolean proMode) {
+        ViewGroup parent = (ViewGroup) sessionBar.getParent();
+        float density = sessionBar.getResources().getDisplayMetrics().density;
+        if (proMode) {
+            if (proContainer == null) return;
+            if (parent != proContainer) {
+                if (parent != null) parent.removeView(sessionBar);
+                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                lp.gravity = Gravity.TOP | Gravity.START;
+                lp.topMargin = Math.round(4 * density);
+                lp.setMarginStart(Math.round(10 * density));
+                lp.setMarginEnd(Math.round(168 * density));
+                proContainer.addView(sessionBar, lp);
+            }
+            sessionBar.setBackgroundColor(Color.TRANSPARENT);
+            sessionBar.setElevation(2 * density);
+        } else {
+            if (topBar == null || topBar.getParent() == null) return;
+            ViewGroup root = (ViewGroup) topBar.getParent();
+            if (parent != root) {
+                if (parent != null) parent.removeView(sessionBar);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                root.addView(sessionBar, root.indexOfChild(topBar) + 1, lp);
+            }
+            sessionBar.setBackgroundColor(
+                ContextCompat.getColor(sessionBar.getContext(), R.color.baby_bg));
+            sessionBar.setElevation(0f);
+        }
+    }
+
+    private void placeSessionBar(boolean proMode) {
+        if (mSessionBar == null) return;
+        ViewGroup proContainer = findViewById(R.id.termux_content_container);
+        placeSessionBarForMode(mSessionBar, mBabyTopBar, proContainer, proMode);
+    }
+
+    /** Gentle alpha pulse for a live session chip's dot; stops on detach. */
+    static void startSessionDotPulse(@NonNull final View dot) {
+        final ObjectAnimator animator = ObjectAnimator.ofFloat(dot, View.ALPHA, 1f, 0.25f);
+        animator.setDuration(950L);
+        animator.setRepeatMode(ValueAnimator.REVERSE);
+        animator.setRepeatCount(ValueAnimator.INFINITE);
+        dot.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                animator.cancel();
+                v.removeOnAttachStateChangeListener(this);
+            }
+        });
+        animator.start();
+    }
+
+    /**
+     * Rebuilds the session bar chips from the two session sources: Baby run
+     * sessions (installs and card actions tracked by the controller registry)
+     * and live terminal sessions from TermuxService. The bar shows in BOTH
+     * modes; in Pro mode the session currently on screen gets a chip too,
+     * marked "showing". A cheap signature check avoids rebuilding on every
+     * poll.
+     */
     private void refreshSessionBar() {
         if (mSessionBar == null || mSessionBarChips == null) return;
 
@@ -940,6 +1013,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             spinner.setVisibility(View.GONE);
             icon.setVisibility(View.VISIBLE);
             icon.setImageResource(R.drawable.ic_baby_terminal);
+            // A live terminal session gets a gently pulsing dot, so the chip
+            // itself shows that something is alive behind it.
+            View dot = chip.findViewById(R.id.chip_dot);
+            if (dot != null) {
+                dot.setVisibility(View.VISIBLE);
+                startSessionDotPulse(dot);
+            }
             boolean isCurrent = terminalSession == currentSession;
             state.setText(isCurrent
                 ? R.string.baby_session_bar_current
@@ -1073,6 +1153,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
 
+        placeSessionBar(!babyMode);
         refreshSessionBar();
     }
 
