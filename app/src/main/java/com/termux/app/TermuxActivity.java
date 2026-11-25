@@ -21,7 +21,9 @@ import android.os.IBinder;
 import android.util.TypedValue;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
+import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -203,7 +205,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** Termux Baby mode controller and chrome views. */
     private BabyModeController mBabyModeController;
     private View mBabyTopBar;
-    private View mBabyProReturnPill;
     private TextView mBabyModeEasyTab;
     private TextView mBabyModeProTab;
 
@@ -747,7 +748,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void setBabyModeViews() {
         mBabyTopBar = findViewById(R.id.baby_top_bar);
-        mBabyProReturnPill = findViewById(R.id.baby_pro_return_pill);
         mBabyModeEasyTab = findViewById(R.id.baby_mode_easy_tab);
         mBabyModeProTab = findViewById(R.id.baby_mode_pro_tab);
         View babySettingsButton = findViewById(R.id.baby_settings_button);
@@ -783,15 +783,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mBabyModeProTab != null) {
             mBabyModeProTab.setOnClickListener(v -> switchToProMode(null));
         }
-        // The Pro-mode pill is a two-tab switcher (Easy | Terminal): only the
-        // Easy tab is actionable; the Terminal tab is the selected state.
-        View proPillEasyTab = findViewById(R.id.baby_pro_pill_easy_tab);
-        if (proPillEasyTab != null) {
-            proPillEasyTab.setOnClickListener(v -> switchToBabyMode());
-        }
-
         mSessionBar = findViewById(R.id.baby_session_bar);
         mSessionBarChips = findViewById(R.id.baby_session_bar_chips);
+        setUpModeSwipe();
         refreshSessionBar();
         if (babySettingsButton != null) {
             babySettingsButton.setOnClickListener(v ->
@@ -845,72 +839,101 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
-     * Places the session bar (and the Pro mode pill) where the current mode
-     * expects them. Easy mode: the bar is a strip in the root column under
-     * the top bar, and the pill floats over the terminal's top end. Pro
-     * mode: BOTH views move into the shared top row in the column — the
-     * bar scrolls in the weight-1 slot, the pill sits after it. Sharing a
-     * row makes overlap impossible by construction (an earlier overlay
-     * placement guessed the pill's width and the chips slid under it) and
-     * the terminal keeps its full height.
+     * The session bar lives in ONE place in both modes: a strip in the
+     * root column directly under the top bar (the top of the screen is
+     * identical in Easy and Pro, user decision 2026-11-25). Earlier Pro
+     * placements floated it over the terminal, where it covered output
+     * and collided with the mode pill — both problems disappear when the
+     * bar simply stays in the column.
      */
-    static void placeSessionBarForMode(@NonNull View sessionBar, @Nullable View topBar,
-                                       @Nullable View pill, @Nullable ViewGroup proRow,
-                                       @Nullable ViewGroup proContainer, boolean proMode) {
-        float density = sessionBar.getResources().getDisplayMetrics().density;
-        if (proMode) {
-            if (proRow == null) return;
-            if (sessionBar.getParent() != proRow) {
-                ViewGroup old = (ViewGroup) sessionBar.getParent();
-                if (old != null) old.removeView(sessionBar);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-                proRow.addView(sessionBar, 0, lp);
-            }
-            sessionBar.setBackgroundColor(Color.TRANSPARENT);
-            sessionBar.setElevation(0f);
-            if (pill != null && pill.getParent() != proRow) {
-                ViewGroup old = (ViewGroup) pill.getParent();
-                if (old != null) old.removeView(pill);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, Math.round(34 * density));
-                lp.setMarginStart(Math.round(8 * density));
-                proRow.addView(pill, lp);
-            }
-            proRow.setVisibility(View.VISIBLE);
-        } else {
-            if (proRow != null) proRow.setVisibility(View.GONE);
-            if (pill != null && proContainer != null && pill.getParent() != proContainer) {
-                ViewGroup old = (ViewGroup) pill.getParent();
-                if (old != null) old.removeView(pill);
-                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, Math.round(34 * density));
-                lp.gravity = Gravity.TOP | Gravity.END;
-                lp.topMargin = Math.round(4 * density);
-                lp.setMarginEnd(Math.round(10 * density));
-                proContainer.addView(pill, lp);
-            }
-            if (topBar == null || topBar.getParent() == null) return;
-            ViewGroup root = (ViewGroup) topBar.getParent();
-            if (sessionBar.getParent() != root) {
-                ViewGroup old = (ViewGroup) sessionBar.getParent();
-                if (old != null) old.removeView(sessionBar);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                root.addView(sessionBar, root.indexOfChild(topBar) + 1, lp);
-            }
-            sessionBar.setBackgroundColor(
-                ContextCompat.getColor(sessionBar.getContext(), R.color.baby_bg));
-            sessionBar.setElevation(0f);
+    static void placeSessionBarForMode(@NonNull View sessionBar, @Nullable View topBar) {
+        if (topBar == null || topBar.getParent() == null) return;
+        ViewGroup root = (ViewGroup) topBar.getParent();
+        if (sessionBar.getParent() != root) {
+            ViewGroup old = (ViewGroup) sessionBar.getParent();
+            if (old != null) old.removeView(sessionBar);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            root.addView(sessionBar, root.indexOfChild(topBar) + 1, lp);
         }
+        sessionBar.setBackgroundColor(
+            ContextCompat.getColor(sessionBar.getContext(), R.color.baby_bg));
+        sessionBar.setElevation(0f);
     }
 
-    private void placeSessionBar(boolean proMode) {
+    private void placeSessionBar() {
         if (mSessionBar == null) return;
-        ViewGroup proRow = findViewById(R.id.baby_pro_top_row);
-        ViewGroup proContainer = findViewById(R.id.termux_content_container);
-        placeSessionBarForMode(
-            mSessionBar, mBabyTopBar, mBabyProReturnPill, proRow, proContainer, proMode);
+        placeSessionBarForMode(mSessionBar, mBabyTopBar);
+    }
+
+    /**
+     * Decides whether a horizontal fling switches modes. Deliberately
+     * strict — a fast, long, mostly-horizontal fling only — so terminal
+     * text selection, scrolling and drawer gestures never trigger it.
+     * Swipe left goes forward to Pro; swipe right comes back to Easy.
+     *
+     * @return the target mode (TRUE = Easy, FALSE = Pro), or null when
+     * the fling is not a mode switch.
+     */
+    @Nullable
+    static Boolean swipeTargetMode(boolean babyMode, float deltaX, float deltaY,
+                                   float velocityX, float minDistancePx, float minVelocityPx) {
+        if (Math.abs(deltaX) < minDistancePx) return null;
+        if (Math.abs(velocityX) < minVelocityPx) return null;
+        if (Math.abs(deltaX) < 2f * Math.abs(deltaY)) return null;
+        if (deltaX < 0 && babyMode) return Boolean.FALSE;
+        if (deltaX > 0 && !babyMode) return Boolean.TRUE;
+        return null;
+    }
+
+    private GestureDetector mModeSwipeDetector;
+
+    private void setUpModeSwipe() {
+        final float density = getResources().getDisplayMetrics().density;
+        final float minDistancePx = 96f * density;
+        final float minVelocityPx = 550f * density;
+        mModeSwipeDetector = new GestureDetector(this,
+            new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onFling(MotionEvent e1, MotionEvent e2,
+                                       float velocityX, float velocityY) {
+                    if (e1 == null || e2 == null) return false;
+                    Boolean target = swipeTargetMode(mIsBabyModeActive,
+                        e2.getX() - e1.getX(), e2.getY() - e1.getY(),
+                        velocityX, minDistancePx, minVelocityPx);
+                    if (target == null) return false;
+                    if (target) {
+                        switchToBabyMode();
+                    } else {
+                        switchToProMode(null);
+                    }
+                    animateModeSwitch(target);
+                    return false; // observe only; never consume the event
+                }
+            });
+    }
+
+    /** Slides the freshly switched content in from the swipe's side. */
+    private void animateModeSwitch(boolean toBaby) {
+        View content = findViewById(R.id.activity_termux_root_relative_layout);
+        if (content == null || content.getWidth() == 0) return;
+        float from = (toBaby ? -1f : 1f) * content.getWidth() * 0.22f;
+        content.setTranslationX(from);
+        content.setAlpha(0.55f);
+        content.animate()
+            .translationX(0f)
+            .alpha(1f)
+            .setDuration(230L)
+            .setInterpolator(new android.view.animation.DecelerateInterpolator())
+            .start();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (mModeSwipeDetector != null) {
+            mModeSwipeDetector.onTouchEvent(ev);
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     /** Gentle alpha pulse for a live session chip's dot; stops on detach. */
@@ -1093,13 +1116,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
-     * Termux Baby: in Pro mode the "back to Easy" pill used to float on top of the
-     * terminal output and hide its top-right corner. Reserve a dedicated top strip
-     * for it instead: the TerminalView gets a top margin in Pro mode so it renders
-     * below the pill and no output is ever covered. (Padding the shared container
-     * would not work: the pill is a child of the same container and would be
-     * pushed into the terminal area together with it.)
-     * Strip height = pill height (34dp) + its top margin (4dp) + breathing room.
+     * Termux Baby: an earlier Pro design floated a "back to Easy" pill over
+     * the terminal and reserved a top strip for it via this margin. The
+     * pill is gone (the top bar is shared by both modes now), so the inset
+     * is always 0; the method stays so both mode branches reset it.
      */
     private void setProReturnPillTopInset(boolean proMode) {
         if (mTerminalView == null) return;
@@ -1126,7 +1146,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 drawer.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
             }
             if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.VISIBLE);
-            if (mBabyProReturnPill != null) mBabyProReturnPill.setVisibility(View.GONE);
             setProReturnPillTopInset(false);
             updateModeSwitcherTabs(true);
 
@@ -1145,9 +1164,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             getWindow().getDecorView().setBackgroundColor(ContextCompat.getColor(this, R.color.baby_bg));
             updateBabySystemBarsAppearance(true);
         } else {
-            if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.GONE);
-            if (mBabyProReturnPill != null) mBabyProReturnPill.setVisibility(View.VISIBLE);
-            setProReturnPillTopInset(true);
+            // The top of the screen is IDENTICAL in both modes (user
+            // decision 2026-11-25): the top bar with the mode switcher
+            // stays, and there is no separate floating Pro pill anymore.
+            if (mBabyTopBar != null) mBabyTopBar.setVisibility(View.VISIBLE);
+            setProReturnPillTopInset(false);
             updateModeSwitcherTabs(false);
 
             if (mBabyModeController != null) {
@@ -1174,7 +1195,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
 
-        placeSessionBar(!babyMode);
+        placeSessionBar();
         refreshSessionBar();
     }
 

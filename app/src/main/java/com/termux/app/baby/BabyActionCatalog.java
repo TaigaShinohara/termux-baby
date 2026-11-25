@@ -597,6 +597,13 @@ public final class BabyActionCatalog {
         if (isPythonCalcTemplate(action.commandTemplate)) {
             return PYTHON_CALC_DISPLAY_FORM;
         }
+        // Making a folder runs a follow-up listing so the new folder is
+        // visible in the result; on the card only the making itself is
+        // the lesson, so the preview shows that (real) first half. The
+        // runner sheet still shows the full resolved command.
+        if (action.commandTemplate.startsWith("mkdir ")) {
+            return "mkdir -p -- 名前";
+        }
         // Always the REAL command — a shortened fake preview would teach a
         // command that does not exist. Placeholders render as the word the
         // learner will type (名前), which the token notes also use. Long

@@ -18,19 +18,19 @@
     <string name="baby_action_files_sub">フォルダの中身</string>
 
     <string name="baby_action_install_title">ツールを入れる</string>
-    <string name="baby_action_install_sub">便利な道具を追加</string>
+    <string name="baby_action_install_sub">Pythonなど、できることを増やす道具を追加</string>
 
-    <string name="baby_action_network_title">ネット確認</string>
+    <string name="baby_action_network_title">ネットにつながるか確認</string>
     <string name="baby_action_network_sub">つながるかテスト</string>
 
     <string name="baby_action_note_title">メモを書く</string>
     <string name="baby_action_note_sub">かんたん保存</string>
 
-    <string name="baby_action_device_title">スマホ情報</string>
-    <string name="baby_action_device_sub">空き容量と環境</string>
+    <string name="baby_action_device_title">スマホの空き容量</string>
+    <string name="baby_action_device_sub">あとどれだけ入るかと、このスマホの種類</string>
 
-    <string name="baby_action_python_title">Pythonを試す</string>
-    <string name="baby_action_python_sub">はじめての実行</string>
+    <string name="baby_action_python_title">Pythonで計算する</string>
+    <string name="baby_action_python_sub">式を入れると、答えが出る</string>
 
     <!-- Friendly Runner Sheet -->
     <string name="baby_runner_running">いま動かしています…</string>
@@ -52,7 +52,7 @@
     <string name="baby_summary_network_online">インターネットにつながっています。</string>
     <string name="baby_summary_network_online_ms">インターネットにつながっています（応答 %1$s ms）。</string>
     <string name="baby_summary_network_offline">インターネットにつながっていないようです。Wi-Fiや通信を確認してみてください。</string>
-    <string name="baby_summary_device_info">端末タイプ: %1$s\n空き容量: %2$s</string>
+    <string name="baby_summary_device_info">このスマホの種類: %1$s\n空き容量: %2$s</string>
     <string name="baby_summary_python_hello">Pythonが元気に動きました！</string>
     <string name="baby_summary_python_missing">まだPythonが入っていないようです。下のボタンから1タップで入れられます。</string>
     <string name="baby_summary_install_done">%1$s を使う準備ができました！</string>
@@ -80,7 +80,7 @@
     <string name="baby_helper_command_preview">実行: %1$s</string>
 
     <!-- Command Helper Recipes -->
-    <string name="baby_recipe_pwd_title">いまの場所を見る</string>
+    <string name="baby_recipe_pwd_title">いま開いているフォルダを見る</string>
     <string name="baby_recipe_pwd_sub">現在開いているフォルダを表示</string>
     <string name="baby_recipe_mkdir_title">フォルダをつくる</string>
     <string name="baby_recipe_mkdir_sub">新しいフォルダを作成</string>
@@ -92,10 +92,10 @@
     <string name="baby_recipe_disk_sub">ストレージの残りを確認</string>
     <string name="baby_recipe_date_title">日付と時刻を見る</string>
     <string name="baby_recipe_date_sub">現在時刻を表示</string>
-    <string name="baby_recipe_ip_title">IPアドレスを見る</string>
-    <string name="baby_recipe_ip_sub">ネット上の接続アドレスを確認</string>
-    <string name="baby_recipe_update_title">ツール一覧を更新</string>
-    <string name="baby_recipe_update_sub">最新のパッケージ情報を取得</string>
+    <string name="baby_recipe_ip_title">ネットでの自分の番号を見る</string>
+    <string name="baby_recipe_ip_sub">つながっているか確認するときに使う数字</string>
+    <string name="baby_recipe_update_title">道具のカタログを新しくする</string>
+    <string name="baby_recipe_update_sub">入れられる道具の一覧を最新の状態にする（これだけでは何も入りません）</string>
     <string name="baby_recipe_python_calc_title">Pythonで計算する</string>
     <string name="baby_recipe_python_calc_sub">かんたんな式を計算</string>
     <string name="baby_recipe_python_calc_hint">計算式（例: 12 * 34）</string>
@@ -118,16 +118,16 @@
     <string name="baby_installer_try">試す</string>
     <string name="baby_installer_launch">ひらく</string>
     <string name="baby_installer_agents_header">AIエージェント</string>
-    <string name="baby_installer_agents_subtitle">このスマホの中で動くコーディングエージェント。入れるのに数分かかるよ。初回のログインは自分でやってね。</string>
+    <string name="baby_installer_agents_subtitle">AIにプログラム作りを手伝ってもらう道具。入れるのに数分かかるよ。初回のログインは自分でやってね。</string>
 
     <string name="baby_agent_opencode_name">opencode</string>
-    <string name="baby_agent_opencode_desc">オープンソースのコーディングエージェント。有志のTermux版をそのまま入れるよ。</string>
+    <string name="baby_agent_opencode_desc">無料で使える、AIお手伝い道具</string>
     <string name="baby_agent_claude_name">Claude Code</string>
     <string name="baby_agent_claude_desc">Anthropicのコーディングエージェント。Node.jsと一緒に入るよ。</string>
     <string name="baby_agent_gemini_name">Gemini CLI</string>
     <string name="baby_agent_gemini_desc">GoogleのGeminiをターミナルで使う道具。Node.jsと一緒に入るよ。</string>
     <string name="baby_agent_agy_name">Antigravity (agy)</string>
-    <string name="baby_agent_agy_desc">GoogleのエージェントCLI。Debianのお部屋（proot）経由で入れるので、初回は一番時間がかかるよ。</string>
+    <string name="baby_agent_agy_desc">GoogleのAIお手伝い。別の部屋を用意してから入れるので、初回は一番時間がかかるよ。</string>
 
     <string name="baby_install_confirm_title">%1$s を入れますか？</string>
     <string name="baby_install_confirm_message">ダウンロードして入れるよ。数分かかることがあって、通信も少し使うよ。</string>
@@ -149,7 +149,7 @@
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">プログラミング学習や自動化に人気の言語</string>
     <string name="baby_tool_git_name">Git</string>
-    <string name="baby_tool_git_desc">プログラムの取得や保存に使う道具</string>
+    <string name="baby_tool_git_desc">プログラムを保存したり、ネットから取ってきたりする道具</string>
     <string name="baby_tool_nano_name">Nano</string>
     <string name="baby_tool_nano_desc">ターミナルで使えるシンプルなメモ帳</string>
     <string name="baby_tool_tree_name">Tree</string>
@@ -218,35 +218,35 @@
 
     <!-- Token meanings: what each part of a command does (learning material) -->
     <string name="baby_token_ls">ファイルとフォルダの一覧を出す</string>
-    <string name="baby_token_ls_la">隠しファイルも含めて、くわしく</string>
+    <string name="baby_token_ls_la">普段は見えないファイルも含めて、くわしく</string>
     <string name="baby_token_color_never">色なしで（アプリが見やすく整えるため）</string>
     <string name="baby_token_ping">相手が応答するか、試しに呼んでみる</string>
     <string name="baby_token_ping_c">3回だけ</string>
     <string name="baby_token_ping_w">返事は4秒まで待つ</string>
-    <string name="baby_token_ping_target">試し先（インターネット上の番号）</string>
+    <string name="baby_token_ping_target">相手の目印になる番号（インターネットの住所のようなもの）</string>
     <string name="baby_token_uname">機械の種類を出す</string>
     <string name="baby_token_and">うまくいったら、次へ進む</string>
-    <string name="baby_token_df">空き容量を調べる（読みやすい単位で）</string>
-    <string name="baby_token_home">あなたのホームフォルダ</string>
+    <string name="baby_token_df">空き容量を調べる（GBなど大きな単位で）</string>
+    <string name="baby_token_home">あなた専用のフォルダ</string>
     <string name="baby_token_pwd">今いる場所を表示する</string>
     <string name="baby_token_mkdir">フォルダを作る</string>
     <string name="baby_token_mkdir_p">途中のフォルダもまとめて作る（あっても大丈夫）</string>
     <string name="baby_token_your_name">あなたが入れる名前</string>
     <string name="baby_token_find">今の場所から探す</string>
-    <string name="baby_token_find_depth">3階層の深さまで</string>
+    <string name="baby_token_find_depth">3つ下のフォルダまで</string>
     <string name="baby_token_find_iname">名前で探す（大文字・小文字は区別しない）</string>
     <string name="baby_token_date">今の日時を表示する</string>
     <string name="baby_token_curl">ネットの向こうへデータを取りに行く</string>
     <string name="baby_token_curl_s">静かに（進み具合を表示しない）</string>
     <string name="baby_token_curl_time">最大8秒まで</string>
-    <string name="baby_token_ifconfig">あなたの外向きの番号を教えてくれる場所</string>
+    <string name="baby_token_ifconfig">あなたの番号を教えてくれるサイト</string>
     <string name="baby_token_pkg">ツールを管理する命令</string>
     <string name="baby_token_pkg_update">一覧を新しくする</string>
     <string name="baby_token_pkg_install">ツールを入れる</string>
-    <string name="baby_token_npm">Node.jsのツールを入れる仕組み</string>
+    <string name="baby_token_npm">道具を動かす土台（Node.js）の道具入れ</string>
     <string name="baby_token_yes">質問には全部「はい」と答える</string>
     <string name="baby_token_python3">Python（プログラミング言語）を動かす</string>
-    <string name="baby_token_python_c">次の文をプログラムとして実行する</string>
+    <string name="baby_token_python_c">次に書いた計算や命令を実行する</string>
     <string name="baby_token_python_expr">式を計算して答えを表示する（安全な計算だけ）</string>
     <!-- Easy Mode redesign: home, cards, runner, catalog -->
     <string name="baby_home_next_title">つぎに覚える</string>

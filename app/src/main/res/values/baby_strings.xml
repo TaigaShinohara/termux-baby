@@ -18,19 +18,19 @@
     <string name="baby_action_files_sub">Your folders</string>
 
     <string name="baby_action_install_title">Install Tools</string>
-    <string name="baby_action_install_sub">Add apps</string>
+    <string name="baby_action_install_sub">Add tools that let you do more, like Python</string>
 
-    <string name="baby_action_network_title">Check Network</string>
+    <string name="baby_action_network_title">Check you are online</string>
     <string name="baby_action_network_sub">Test online</string>
 
     <string name="baby_action_note_title">Quick Note</string>
     <string name="baby_action_note_sub">Save a memo</string>
 
-    <string name="baby_action_device_title">Device Info</string>
-    <string name="baby_action_device_sub">Storage &amp; info</string>
+    <string name="baby_action_device_title">Free space on this phone</string>
+    <string name="baby_action_device_sub">How much more fits, and what phone this is</string>
 
-    <string name="baby_action_python_title">Try Python</string>
-    <string name="baby_action_python_sub">First code</string>
+    <string name="baby_action_python_title">Calculate with Python</string>
+    <string name="baby_action_python_sub">Type a sum, get the answer</string>
 
     <!-- Friendly Runner Sheet -->
     <string name="baby_runner_running">Working on it…</string>
@@ -52,7 +52,7 @@
     <string name="baby_summary_network_online">You are connected to the internet.</string>
     <string name="baby_summary_network_online_ms">Connected to the internet (response %1$s ms).</string>
     <string name="baby_summary_network_offline">It looks like you are offline. Please check Wi-Fi or mobile data.</string>
-    <string name="baby_summary_device_info">Device architecture: %1$s\nAvailable space: %2$s</string>
+    <string name="baby_summary_device_info">This phone\'s type: %1$s\nFree space: %2$s</string>
     <string name="baby_summary_python_hello">Python ran your first message successfully!</string>
     <string name="baby_summary_python_missing">Python is not installed yet. Tap below to install it with one tap.</string>
     <string name="baby_summary_install_done">%1$s is ready to use!</string>
@@ -80,7 +80,7 @@
     <string name="baby_helper_command_preview">Runs: %1$s</string>
 
     <!-- Command Helper Recipes -->
-    <string name="baby_recipe_pwd_title">See current folder</string>
+    <string name="baby_recipe_pwd_title">See the folder you are in</string>
     <string name="baby_recipe_pwd_sub">Show where you are right now</string>
     <string name="baby_recipe_mkdir_title">Create a new folder</string>
     <string name="baby_recipe_mkdir_sub">Make a folder in your home directory</string>
@@ -92,10 +92,10 @@
     <string name="baby_recipe_disk_sub">See how much space is left</string>
     <string name="baby_recipe_date_title">Show date &amp; time</string>
     <string name="baby_recipe_date_sub">Check the system clock</string>
-    <string name="baby_recipe_ip_title">Check public IP address</string>
-    <string name="baby_recipe_ip_sub">See your internet IP address</string>
-    <string name="baby_recipe_update_title">Update tool list</string>
-    <string name="baby_recipe_update_sub">Refresh available Termux packages</string>
+    <string name="baby_recipe_ip_title">See your number on the internet</string>
+    <string name="baby_recipe_ip_sub">The number used to check your connection</string>
+    <string name="baby_recipe_update_title">Refresh the tool catalog</string>
+    <string name="baby_recipe_update_sub">Update the list of tools you can add (this alone adds nothing)</string>
     <string name="baby_recipe_python_calc_title">Calculate with Python</string>
     <string name="baby_recipe_python_calc_sub">Run a simple math expression</string>
     <string name="baby_recipe_python_calc_hint">Expression (e.g. 12 * 34)</string>
@@ -118,16 +118,16 @@
     <string name="baby_installer_try">Try</string>
     <string name="baby_installer_launch">Open</string>
     <string name="baby_installer_agents_header">AI Agents</string>
-    <string name="baby_installer_agents_subtitle">Coding agents that run right on this phone. Installing takes a few minutes; signing in is yours to do on first open.</string>
+    <string name="baby_installer_agents_subtitle">AI helpers that write code with you. Installing takes a few minutes; signing in is yours to do on first open.</string>
 
     <string name="baby_agent_opencode_name">opencode</string>
-    <string name="baby_agent_opencode_desc">Open-source coding agent. Community Termux build, installs natively.</string>
+    <string name="baby_agent_opencode_desc">A free AI coding helper</string>
     <string name="baby_agent_claude_name">Claude Code</string>
     <string name="baby_agent_claude_desc">Anthropic\'s coding agent. Installs with Node.js.</string>
     <string name="baby_agent_gemini_name">Gemini CLI</string>
     <string name="baby_agent_gemini_desc">Google\'s Gemini in the terminal. Installs with Node.js.</string>
     <string name="baby_agent_agy_name">Antigravity (agy)</string>
-    <string name="baby_agent_agy_desc">Google\'s agent CLI via a Debian room (proot). First setup is the long one.</string>
+    <string name="baby_agent_agy_desc">Google\'s AI helper. It needs its own room set up first, so the first install takes the longest.</string>
 
     <string name="baby_install_confirm_title">Install %1$s?</string>
     <string name="baby_install_confirm_message">It will be downloaded and installed. This can take a few minutes and uses some data.</string>
@@ -149,7 +149,7 @@
     <string name="baby_tool_python_name">Python</string>
     <string name="baby_tool_python_desc">Friendly language for learning coding &amp; scripts</string>
     <string name="baby_tool_git_name">Git</string>
-    <string name="baby_tool_git_desc">Download and save code projects</string>
+    <string name="baby_tool_git_desc">Save code projects and bring them in from the internet</string>
     <string name="baby_tool_nano_name">Nano</string>
     <string name="baby_tool_nano_desc">Simple text editor inside the terminal</string>
     <string name="baby_tool_tree_name">Tree</string>
@@ -224,35 +224,35 @@
 
     <!-- Token meanings: what each part of a command does (learning material) -->
     <string name="baby_token_ls">List files and folders</string>
-    <string name="baby_token_ls_la">Include hidden files, with details</string>
+    <string name="baby_token_ls_la">Include files you normally cannot see, with details</string>
     <string name="baby_token_color_never">No colors (the app formats it readably)</string>
     <string name="baby_token_ping">Call out to check the other side answers</string>
     <string name="baby_token_ping_c">Only 3 times</string>
     <string name="baby_token_ping_w">Wait up to 4 seconds for a reply</string>
-    <string name="baby_token_ping_target">Where to test (an address on the internet)</string>
+    <string name="baby_token_ping_target">The other side\'s number (like an address on the internet)</string>
     <string name="baby_token_uname">Show what kind of machine this is</string>
     <string name="baby_token_and">If that worked, continue to the next part</string>
-    <string name="baby_token_df">Check free space (in readable units)</string>
-    <string name="baby_token_home">Your home folder</string>
+    <string name="baby_token_df">Check free space (in big units like GB)</string>
+    <string name="baby_token_home">Your own folder</string>
     <string name="baby_token_pwd">Show where you are now</string>
     <string name="baby_token_mkdir">Make a folder</string>
     <string name="baby_token_mkdir_p">Make parents too (fine if it already exists)</string>
     <string name="baby_token_your_name">A name you type in</string>
     <string name="baby_token_find">Search from the current place</string>
-    <string name="baby_token_find_depth">Up to 3 levels deep</string>
+    <string name="baby_token_find_depth">Up to 3 folders down</string>
     <string name="baby_token_find_iname">Search by name (ignoring upper/lower case)</string>
     <string name="baby_token_date">Show the current date and time</string>
     <string name="baby_token_curl">Fetch data from across the network</string>
     <string name="baby_token_curl_s">Quietly (no progress display)</string>
     <string name="baby_token_curl_time">Up to 8 seconds at most</string>
-    <string name="baby_token_ifconfig">A place that tells you your public address</string>
+    <string name="baby_token_ifconfig">A site that tells you your number</string>
     <string name="baby_token_pkg">The command that manages tools</string>
     <string name="baby_token_pkg_update">Refresh the list</string>
     <string name="baby_token_pkg_install">Install a tool</string>
-    <string name="baby_token_npm">Installs tools for Node.js</string>
+    <string name="baby_token_npm">The toolbox for the base (Node.js) that runs tools</string>
     <string name="baby_token_yes">Answer yes to every question</string>
     <string name="baby_token_python3">Run Python (a programming language)</string>
-    <string name="baby_token_python_c">Run the next text as a program</string>
+    <string name="baby_token_python_c">Run the calculation or command written next</string>
     <string name="baby_token_python_expr">Calculate the expression and show the answer (safe math only)</string>
     <!-- Easy Mode redesign: home, cards, runner, catalog -->
     <string name="baby_home_next_title">Next to learn</string>

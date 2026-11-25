@@ -88,9 +88,9 @@
 
     <!-- Session bar: visible while a Baby run or a terminal session is
          alive. One chip per session; tapping a chip jumps back to that
-         session, the chip's close button ends it. Declared here as a strip
-         under the top bar (Easy Mode); in Pro Mode TermuxActivity moves it
-         into the shared top row below, next to the mode pill. -->
+         session, the chip's close button ends it. A strip under the top
+         bar in BOTH modes — the top of the screen is identical in Easy
+         and Pro (user decision 2026-11-25). -->
     <HorizontalScrollView
         android:id="@+id/baby_session_bar"
         android:layout_width="match_parent"
@@ -109,25 +109,6 @@
             android:paddingEnd="10dp"
             android:paddingBottom="6dp" />
     </HorizontalScrollView>
-
-    <!-- Pro Mode top row: the session bar (scrollable, weight 1) and the
-         mode pill share ONE row in the column. Sharing a row makes overlap
-         impossible by construction and keeps the terminal's full height —
-         the earlier floating-overlay placement could cover the pill and
-         the terminal's first line. TermuxActivity moves both views into
-         this row in Pro Mode and back to their declared places in Easy. -->
-    <LinearLayout
-        android:id="@+id/baby_pro_top_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/baby_bg"
-        android:gravity="end|center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="10dp"
-        android:paddingTop="4dp"
-        android:paddingEnd="10dp"
-        android:paddingBottom="4dp"
-        android:visibility="gone" />
 
     <RelativeLayout
         android:id="@+id/activity_termux_root_relative_layout"
@@ -160,53 +141,6 @@
                     android:scrollbars="vertical"
                     tools:ignore="UnusedAttribute" />
 
-                <!-- Mode switcher pill (visible only in Pro Terminal Mode). Mirrors the
-                     Easy Mode top-bar switcher: BOTH tabs are always shown so the user
-                     can see where they are and switch back in one tap. -->
-                <LinearLayout
-                    android:id="@+id/baby_pro_return_pill"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:layout_gravity="top|end"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginEnd="10dp"
-                    android:background="@drawable/baby_pill_track"
-                    android:contentDescription="@string/baby_mode_switch_cd"
-                    android:elevation="2dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="3dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/baby_pro_pill_easy_tab"
-                        android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:fontFamily="sans-serif-medium"
-                        android:gravity="center"
-                        android:minWidth="52dp"
-                        android:paddingStart="10dp"
-                        android:paddingEnd="10dp"
-                        android:text="@string/baby_mode_easy"
-                        android:textColor="@color/baby_text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/baby_pro_pill_pro_tab"
-                        android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
-                        android:background="@drawable/baby_pill_selected"
-                        android:fontFamily="sans-serif-medium"
-                        android:gravity="center"
-                        android:minWidth="52dp"
-                        android:paddingStart="10dp"
-                        android:paddingEnd="10dp"
-                        android:text="@string/baby_mode_pro"
-                        android:textColor="@color/baby_on_primary"
-                        android:textSize="12sp" />
-                </LinearLayout>
 
                 <include
                     layout="@layout/view_baby_home"

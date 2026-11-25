@@ -2,14 +2,12 @@ package com.termux.app;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -26,11 +24,10 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 
 /**
- * The session bar and the Pro mode pill share ONE row in the root column
- * in Pro mode, so they can never overlap (an earlier overlay placement
- * guessed the pill's width and the chips slid under it on device). In
- * Easy mode the bar returns to its strip under the top bar and the pill
- * returns to its overlay slot in the content container.
+ * The session bar has ONE home in both modes: a strip in the root column
+ * directly under the top bar (the top of the screen is identical in Easy
+ * and Pro, user decision 2026-11-25). Also covers the mode-swipe fling
+ * decision: only a fast, long, mostly-horizontal fling switches modes.
  */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34, qualifiers = "w411dp-h891dp")
@@ -41,9 +38,6 @@ public class BabySessionBarPlacementTest {
     private LinearLayout mRoot;
     private View mTopBar;
     private HorizontalScrollView mSessionBar;
-    private LinearLayout mProRow;
-    private FrameLayout mContentContainer;
-    private LinearLayout mPill;
 
     @Before
     public void setUp() {
@@ -59,66 +53,30 @@ public class BabySessionBarPlacementTest {
         mSessionBar.addView(new LinearLayout(mContext));
         mRoot.addView(mSessionBar, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        mProRow = new LinearLayout(mContext);
-        mProRow.setOrientation(LinearLayout.HORIZONTAL);
-        mProRow.setVisibility(View.GONE);
-        mRoot.addView(mProRow, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        mContentContainer = new FrameLayout(mContext);
-        mRoot.addView(mContentContainer, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        mPill = new LinearLayout(mContext);
-        FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, 34);
-        pillLp.gravity = Gravity.TOP | Gravity.END;
-        mContentContainer.addView(mPill, pillLp);
-    }
-
-    private void place(boolean proMode) {
-        TermuxActivity.placeSessionBarForMode(
-            mSessionBar, mTopBar, mPill, mProRow, mContentContainer, proMode);
     }
 
     @Test
-    public void proMode_barAndPillShareOneRow_barFirstWithWeight() {
-        place(true);
-
-        assertSame(mProRow, mSessionBar.getParent());
-        assertSame(mProRow, mPill.getParent());
-        assertTrue(mProRow.indexOfChild(mSessionBar) < mProRow.indexOfChild(mPill));
-        LinearLayout.LayoutParams lp =
-            (LinearLayout.LayoutParams) mSessionBar.getLayoutParams();
-        assertEquals(0, lp.width);
-        assertEquals(1f, lp.weight, 0.001f);
-        assertEquals(View.VISIBLE, mProRow.getVisibility());
-    }
-
-    @Test
-    public void easyMode_barReturnsUnderTopBar_pillReturnsToOverlay() {
-        place(true);
-        place(false);
+    public void sessionBar_sitsDirectlyUnderTopBar() {
+        TermuxActivity.placeSessionBarForMode(mSessionBar, mTopBar);
 
         assertSame(mRoot, mSessionBar.getParent());
         assertEquals(mRoot.indexOfChild(mTopBar) + 1, mRoot.indexOfChild(mSessionBar));
-        assertSame(mContentContainer, mPill.getParent());
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mPill.getLayoutParams();
-        assertEquals(Gravity.TOP | Gravity.END, lp.gravity);
-        assertEquals(View.GONE, mProRow.getVisibility());
     }
 
     @Test
-    public void switchingModesTwice_keepsExactlyOneInstanceOfEach() {
-        place(true);
-        place(false);
-        place(true);
+    public void placingTwice_keepsExactlyOneInstance() {
+        // Simulate a bar that ended up somewhere else (older placements
+        // moved it around): it must come back, exactly once.
+        LinearLayout elsewhere = new LinearLayout(mContext);
+        mRoot.removeView(mSessionBar);
+        elsewhere.addView(mSessionBar);
 
-        assertSame(mProRow, mSessionBar.getParent());
-        assertSame(mProRow, mPill.getParent());
-        assertEquals(2, mProRow.getChildCount());
-        assertEquals(0, mContentContainer.getChildCount());
+        TermuxActivity.placeSessionBarForMode(mSessionBar, mTopBar);
+        TermuxActivity.placeSessionBarForMode(mSessionBar, mTopBar);
+
+        assertSame(mRoot, mSessionBar.getParent());
+        assertEquals(0, elsewhere.getChildCount());
+        assertEquals(mRoot.indexOfChild(mTopBar) + 1, mRoot.indexOfChild(mSessionBar));
     }
 
     @Test
@@ -131,5 +89,43 @@ public class BabySessionBarPlacementTest {
         assertNotNull(chip.findViewById(R.id.chip_dot));
         TextView title = chip.findViewById(R.id.chip_title);
         assertNotNull(title);
+    }
+
+    // --- Mode swipe ---------------------------------------------------
+
+    private static final float MIN_DISTANCE = 288f; // 96dp at density 3
+    private static final float MIN_VELOCITY = 1650f; // 550dp/s at density 3
+
+    @Test
+    public void swipeLeft_inEasy_goesToPro() {
+        assertEquals(Boolean.FALSE, TermuxActivity.swipeTargetMode(
+            true, -400f, 40f, -2400f, MIN_DISTANCE, MIN_VELOCITY));
+    }
+
+    @Test
+    public void swipeRight_inPro_returnsToEasy() {
+        assertEquals(Boolean.TRUE, TermuxActivity.swipeTargetMode(
+            false, 400f, -30f, 2400f, MIN_DISTANCE, MIN_VELOCITY));
+    }
+
+    @Test
+    public void swipeTowardsCurrentMode_doesNothing() {
+        assertNull(TermuxActivity.swipeTargetMode(
+            false, -400f, 0f, -2400f, MIN_DISTANCE, MIN_VELOCITY));
+        assertNull(TermuxActivity.swipeTargetMode(
+            true, 400f, 0f, 2400f, MIN_DISTANCE, MIN_VELOCITY));
+    }
+
+    @Test
+    public void slowShortOrDiagonalFlings_doNotSwitch() {
+        // Too slow.
+        assertNull(TermuxActivity.swipeTargetMode(
+            true, -400f, 0f, -300f, MIN_DISTANCE, MIN_VELOCITY));
+        // Too short.
+        assertNull(TermuxActivity.swipeTargetMode(
+            true, -120f, 0f, -2400f, MIN_DISTANCE, MIN_VELOCITY));
+        // Mostly vertical (scrolling / text selection drag).
+        assertNull(TermuxActivity.swipeTargetMode(
+            true, -400f, 350f, -2400f, MIN_DISTANCE, MIN_VELOCITY));
     }
 }
