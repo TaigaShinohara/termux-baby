@@ -112,4 +112,54 @@ class BabyHomeScreenshotTest {
         golden.parentFile?.mkdirs()
         root.captureRoboImage(golden)
     }
+
+    @Test
+    fun babyHome_masteredCardShowsLearnedStateAndLastResult() {
+        val activityController = Robolectric.buildActivity(AppCompatActivity::class.java)
+        val activity = activityController.get()
+        activity.setTheme(R.style.Theme_TermuxBaby_Onboarding)
+        activityController.setup()
+
+        // Seed the learning state: see_files is mastered (3 successes) and
+        // carries its last one-line result.
+        activity.getSharedPreferences("termux_baby_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        repeat(3) {
+            BabyPreferences.incrementRunCount(activity, "see_files")
+        }
+        BabyPreferences.setLastResult(activity, "see_files", true, "12 files")
+
+        val root = LayoutInflater.from(activity)
+            .inflate(R.layout.view_baby_home, null, false)
+        activity.setContentView(root)
+
+        val babyController = BabyModeController(activity, root, object : BabyModeController.HostCallbacks {
+            override fun onSwitchToProMode(optionalCommandToRun: String?) {}
+            override fun onOpenSettings() {}
+        })
+        controller = babyController
+        babyController.showBabyHome()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        val grid = root.findViewById<LinearLayout>(R.id.baby_action_grid)
+        val cards = mutableListOf<View>()
+        collectCards(grid, cards)
+        var masteredCard: View? = null
+        for (card in cards) {
+            val title = card.findViewById<TextView>(R.id.baby_card_title)
+            if (title.text.toString() == activity.getString(R.string.baby_action_files_title)) {
+                masteredCard = card
+            }
+        }
+        assertTrue("see_files card missing", masteredCard != null)
+        val badge = masteredCard!!.findViewById<TextView>(R.id.baby_card_recommended_badge)
+        assertEquals(View.VISIBLE, badge.visibility)
+        assertEquals(activity.getString(R.string.baby_card_mastered), badge.text.toString())
+        val last = masteredCard.findViewById<TextView>(R.id.baby_card_last_result)
+        assertTrue(last.text.toString().contains("12 files"))
+
+        val golden = File("src/test/screenshots/baby_home_mastered.png")
+        golden.parentFile?.mkdirs()
+        root.captureRoboImage(golden)
+    }
 }

@@ -85,6 +85,17 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
 
+            <!-- Empty state: every pin removed. Points at the catalog
+                 instead of leaving a blank home. -->
+            <TextView
+                android:id="@+id/baby_home_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/baby_home_empty"
+                android:textAppearance="@style/TextAppearance.Baby.BodySecondary"
+                android:visibility="gone" />
+
             <!-- Next-to-learn: the curriculum's next unmastered command. -->
             <LinearLayout
                 android:id="@+id/baby_next_section"
@@ -121,7 +132,8 @@
         </LinearLayout>
     </ScrollView>
 
-    <!-- Thumb-zone Primary CTA: the full command catalog -->
+    <!-- The full command catalog: kept in the thumb zone but visually
+         quiet — the grid of commands is the home's lead, not this button. -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -133,7 +145,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/baby_home_find_action_button"
-            style="@style/Widget.Baby.PrimaryButton"
+            style="@style/Widget.Baby.SecondaryButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:contentDescription="@string/baby_home_find_action_cd"

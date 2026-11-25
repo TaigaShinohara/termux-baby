@@ -206,19 +206,22 @@
             android:textIsSelectable="true" />
     </ScrollView>
 
-    <!-- Graduation row: run it over there, or type it yourself. -->
+    <!-- Graduation row: run it over there, or type it yourself. Hidden
+         while a run is in flight (using it would cancel the run). -->
     <LinearLayout
+        android:id="@+id/runner_graduation_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:gravity="end"
-        android:orientation="horizontal">
+        android:orientation="vertical"
+        android:visibility="gone">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/runner_open_pro_button"
             style="@style/Widget.Baby.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="start|center_vertical"
             android:text="@string/baby_runner_run_in_terminal"
             app:icon="@drawable/ic_baby_terminal"
             app:iconTint="@color/baby_text_secondary" />
@@ -226,8 +229,9 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/runner_type_myself_button"
             style="@style/Widget.Baby.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="start|center_vertical"
             android:text="@string/baby_runner_type_myself"
             app:icon="@drawable/ic_baby_terminal"
             app:iconTint="@color/baby_primary" />

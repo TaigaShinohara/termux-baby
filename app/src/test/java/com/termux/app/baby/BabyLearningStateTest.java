@@ -58,10 +58,11 @@ public class BabyLearningStateTest {
 
     @Test
     public void pinnedIds_defaultAndRoundTrip() {
+        // No goal chosen yet: the explore goal's defaults apply.
         List<String> defaults = BabyPreferences.getPinnedIds(context);
         assertEquals(
-            Arrays.asList("see_files", "recipe_pwd", "check_network",
-                "device_info", "try_python", "install_tools"),
+            Arrays.asList("recipe_pwd", "see_files", "recipe_find",
+                "recipe_date", "check_network", "install_tools"),
             defaults
         );
         // Every default pin must resolve to something renderable.
@@ -73,6 +74,22 @@ public class BabyLearningStateTest {
             Arrays.asList("recipe_date", "see_files"),
             BabyPreferences.getPinnedIds(context)
         );
+    }
+
+    @Test
+    public void pinnedIds_defaultsFollowTheOnboardingGoal() {
+        BabyPreferences.setOnboardingGoal(context, BabyPreferences.GOAL_TOOLS_PYTHON);
+        assertEquals("try_python", BabyPreferences.getPinnedIds(context).get(0));
+        assertEquals("try_python", BabyPreferences.getGoalLeadActionId(context));
+
+        BabyPreferences.setOnboardingGoal(context, BabyPreferences.GOAL_FILES_DEVICE);
+        assertEquals("see_files", BabyPreferences.getPinnedIds(context).get(0));
+        assertEquals("see_files", BabyPreferences.getGoalLeadActionId(context));
+
+        BabyPreferences.setOnboardingGoal(context, BabyPreferences.GOAL_EXPLORE);
+        assertEquals("recipe_pwd", BabyPreferences.getPinnedIds(context).get(0));
+        // Explore leads with finding things — NOT the same as files/device.
+        assertEquals("recipe_find", BabyPreferences.getGoalLeadActionId(context));
     }
 
     @Test
@@ -107,14 +124,57 @@ public class BabyLearningStateTest {
     }
 
     @Test
-    public void preview_pythonCalcIsTheRealCommand() {
+    public void preview_pythonCalcIsTheTeachingForm() {
         BabyAction calc = BabyActionCatalog.findById("recipe_python_calc");
         assertNotNull(calc);
-        String preview = BabyActionCatalog.getDisplayCommandPreview(calc);
-        // The old fake preview ("python3 -c 'print(...)'") taught a command
-        // that does not exist; the preview must be the real template's start.
-        assertTrue(preview.startsWith("python3 -c 'import ast"));
-        assertFalse(preview.contains("print(...)"));
+        // The executed command is a long safe-evaluator script (an
+        // implementation detail). What the learner sees — and can type —
+        // is the equivalent teaching form.
+        assertEquals(
+            "python3 -c 'print(式)'",
+            BabyActionCatalog.getDisplayCommandPreview(calc)
+        );
+        assertEquals(
+            "python3 -c 'print(2+3)'",
+            BabyActionCatalog.buildDisplayCommand(calc.commandTemplate, "2+3")
+        );
+        // ...and a resolved executed command maps back to the same form.
+        String resolved = BabyActionCatalog.buildSafeCommand(calc.commandTemplate, "2+3");
+        assertEquals(
+            "python3 -c 'print(2+3)'",
+            BabyActionCatalog.getDisplayCommandForResolved(calc, resolved)
+        );
+    }
+
+    @Test
+    public void tokenNotes_everyTokenAppearsInTheDisplayPreview() {
+        // The meanings must describe the very string on screen: for every
+        // catalog item with notes, each note's token literally appears in
+        // the item's display preview.
+        java.util.List<BabyAction> all = new java.util.ArrayList<>();
+        all.addAll(BabyActionCatalog.getHomeActions());
+        all.addAll(BabyActionCatalog.getHelperRecipes());
+        for (BabyAction action : all) {
+            java.util.List<BabyAction.TokenNote> notes =
+                BabyActionCatalog.getTokenNotes(action.id);
+            if (notes.isEmpty()) continue;
+            String preview = BabyActionCatalog.getDisplayCommandPreview(action);
+            for (BabyAction.TokenNote note : notes) {
+                assertTrue(
+                    action.id + ": token '" + note.token + "' not in preview '" + preview + "'",
+                    preview.contains(note.token)
+                );
+            }
+        }
+    }
+
+    @Test
+    public void tokenNotes_forRawCommands_coverInstalls() {
+        assertFalse(BabyActionCatalog.getTokenNotesForCommand("pkg install -y python").isEmpty());
+        assertFalse(BabyActionCatalog.getTokenNotesForCommand("pkg update -y").isEmpty());
+        assertFalse(BabyActionCatalog.getTokenNotesForCommand("python3 -c 'print(1)'").isEmpty());
+        assertTrue(BabyActionCatalog.getTokenNotesForCommand("some-unknown-tool --x").isEmpty());
+        assertTrue(BabyActionCatalog.getTokenNotesForCommand(null).isEmpty());
     }
 
     @Test

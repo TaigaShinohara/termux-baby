@@ -67,6 +67,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
     private final TextView tokenMeaningView;
     private final TextView commandTextView;
     private final TextView rawOutputTextView;
+    private final View graduationRow;
     private final MaterialButton openProButton;
     private final MaterialButton typeMyselfButton;
     private final MaterialButton secondaryButton;
@@ -122,6 +123,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         tokenMeaningView = root.findViewById(R.id.runner_token_meaning);
         commandTextView = root.findViewById(R.id.runner_command_text);
         rawOutputTextView = root.findViewById(R.id.runner_raw_output_text);
+        graduationRow = root.findViewById(R.id.runner_graduation_row);
         openProButton = root.findViewById(R.id.runner_open_pro_button);
         typeMyselfButton = root.findViewById(R.id.runner_type_myself_button);
         secondaryButton = root.findViewById(R.id.runner_secondary_button);
@@ -131,8 +133,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         closeIcon.setOnClickListener(v -> dismiss());
 
         if (proTerminalBridge == null) {
-            openProButton.setVisibility(View.GONE);
-            typeMyselfButton.setVisibility(View.GONE);
+            graduationRow.setVisibility(View.GONE);
         } else {
             openProButton.setOnClickListener(v -> {
                 BabyRunSession current = session;
@@ -145,7 +146,10 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             });
             typeMyselfButton.setOnClickListener(v -> {
                 BabyRunSession current = session;
-                String cmd = current != null ? current.command : null;
+                // Typing practices the DISPLAY form (for the Python
+                // calculator that is the learnable print() form, not the
+                // internal safe-evaluator script).
+                String cmd = current != null ? current.displayCommand : null;
                 if (current != null && current.isRunning()) {
                     current.cancel();
                 }
@@ -196,9 +200,12 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             detachSession();
             actionIconView.setImageResource(iconResId);
             titleView.setText(title);
-            commandTextView.setText(command);
+            BabyAction source = sourceId != null ? BabyActionCatalog.findById(sourceId) : null;
+            commandTextView.setText(source != null
+                ? BabyActionCatalog.getDisplayCommandForResolved(source, command)
+                : command);
             rawOutputTextView.setText("");
-            bindTokens(sourceId);
+            bindTokens(sourceId, command);
             recoveryButton.setVisibility(View.GONE);
             secondaryButton.setVisibility(View.GONE);
             showErrorState(
@@ -219,13 +226,18 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
     /**
      * Shows the "what does this part do?" chips for the session's source
-     * action. Hidden when the action has no annotated parts (installs,
-     * custom commands) — the command itself is still always visible.
+     * action. When the source has no catalog notes (installs, agent
+     * setups), notes are derived from the command itself, so a
+     * {@code pkg install} run explains its parts too. Hidden only when
+     * neither source knows the command — it is still always visible.
      */
-    private void bindTokens(@Nullable String sourceId) {
+    private void bindTokens(@Nullable String sourceId, @Nullable String command) {
         java.util.List<BabyAction.TokenNote> notes = sourceId != null
             ? BabyActionCatalog.getTokenNotes(sourceId)
             : java.util.Collections.emptyList();
+        if (notes.isEmpty()) {
+            notes = BabyActionCatalog.getTokenNotesForCommand(command);
+        }
         tokenChips.removeAllViews();
         tokenMeaningView.setVisibility(View.GONE);
         if (notes.isEmpty()) {
@@ -234,17 +246,30 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         }
         tokensSection.setVisibility(View.VISIBLE);
         Context ctx = getContext();
+        float density = ctx.getResources().getDisplayMetrics().density;
         for (BabyAction.TokenNote note : notes) {
             com.google.android.material.chip.Chip chip =
                 new com.google.android.material.chip.Chip(ctx);
             chip.setText(note.token);
             chip.setCheckable(true);
+            chip.setChipMinHeight(44 * density);
+            chip.setEnsureMinTouchTargetSize(true);
             chip.setOnClickListener(v -> {
                 tokenMeaningView.setText(note.meaningResId);
                 tokenMeaningView.setVisibility(View.VISIBLE);
             });
             tokenChips.addView(chip);
         }
+    }
+
+    /**
+     * The graduation row acts on the session, which would cancel a run
+     * still in flight — so it is only offered once the run has finished
+     * (and never when there is no Pro bridge or no session).
+     */
+    private void updateGraduationRow(boolean finished) {
+        boolean show = finished && proTerminalBridge != null && session != null;
+        graduationRow.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     /**
@@ -258,10 +283,10 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
         actionIconView.setImageResource(newSession.iconResId);
         titleView.setText(newSession.title);
-        commandTextView.setText(newSession.command);
+        commandTextView.setText(newSession.displayCommand);
         rawOutputTextView.setText(newSession.getOutputText());
 
-        bindTokens(newSession.sourceId);
+        bindTokens(newSession.sourceId, newSession.command);
         recoveryButton.setVisibility(View.GONE);
         secondaryButton.setVisibility(View.GONE);
 
@@ -299,7 +324,8 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         titleView.setText(title);
         commandTextView.setText(promptCommand);
         rawOutputTextView.setText("");
-        bindTokens(null);
+        bindTokens(null, promptCommand);
+        updateGraduationRow(false);
 
         progressView.setVisibility(View.GONE);
         statusIconView.setVisibility(View.VISIBLE);
@@ -341,6 +367,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         summaryTextView.setText("");
         summaryTextView.setVisibility(View.GONE);
         primaryButton.setText(R.string.baby_runner_cancel);
+        updateGraduationRow(false);
     }
 
     private void renderResult(@NonNull BabyCommandExecutor.ExecutionResult result) {
@@ -350,6 +377,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             // session bar must not keep a stale "finished" chip for it.
             current.markFinishedSeen();
         }
+        updateGraduationRow(true);
         BabyAction.OutputFormat format = current != null ? current.outputFormat : BabyAction.OutputFormat.GENERIC;
         String displayName = current != null ? current.displayName : null;
 
@@ -442,6 +470,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
         secondaryButton.setVisibility(View.VISIBLE);
         primaryButton.setText(R.string.baby_runner_close);
+        updateGraduationRow(true);
     }
 
     private void detachSession() {

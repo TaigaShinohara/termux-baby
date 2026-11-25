@@ -90,13 +90,16 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         return mSelectedGoal;
     }
 
-    /** The action the try page runs for the current goal. */
+    /**
+     * The action the try page runs for the current goal. The first run of
+     * a new install must be a small guaranteed success, so EVERY goal
+     * tries a command that needs nothing installed (list files / show
+     * where you are). The Python goal's own first step — installing
+     * Python — waits on Home, where the try page's note points.
+     */
     @NonNull
     public BabyAction getTryAction() {
-        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal)) {
-            BabyAction action = BabyActionCatalog.findById(BabyActionCatalog.ACTION_TRY_PYTHON);
-            if (action != null) return action;
-        } else if (BabyPreferences.GOAL_FILES_DEVICE.equals(mSelectedGoal)) {
+        if (BabyPreferences.GOAL_FILES_DEVICE.equals(mSelectedGoal)) {
             BabyAction action = BabyActionCatalog.findById(BabyActionCatalog.ACTION_SEE_FILES);
             if (action != null) return action;
         }
@@ -105,12 +108,9 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         return BabyActionCatalog.getHomeActions().get(0);
     }
 
-    /** The literal command the try page runs (Hello-Python for the Python goal). */
+    /** The literal command the try page runs. */
     @NonNull
     public String getTryCommand() {
-        if (BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal)) {
-            return BabyActionCatalog.PYTHON_HELLO_COMMAND;
-        }
         BabyAction action = getTryAction();
         return action.commandTemplate != null ? action.commandTemplate : "";
     }
@@ -205,13 +205,6 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         TextView titleView = view.findViewById(R.id.onboarding_title);
         TextView bodyView = view.findViewById(R.id.onboarding_body);
         ImageView heroIcon = view.findViewById(R.id.onboarding_hero_icon);
-        View heroBadge = view.findViewById(R.id.onboarding_hero_badge);
-        View mirrorContainer = view.findViewById(R.id.onboarding_mirror_container);
-        View proToggleDemo = view.findViewById(R.id.onboarding_pro_toggle_demo);
-
-        heroBadge.setVisibility(View.GONE);
-        mirrorContainer.setVisibility(View.GONE);
-        proToggleDemo.setVisibility(View.GONE);
 
         titleView.setText(R.string.baby_onboarding_p1_title);
         bodyView.setText(R.string.baby_onboarding_p1_body);
@@ -350,6 +343,11 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         }
         tokensView.setText(tokens.toString());
         tokensView.setVisibility(tokens.length() > 0 ? View.VISIBLE : View.GONE);
+        TextView noteView = view.findViewById(R.id.onboarding_try_note);
+        if (noteView != null) {
+            noteView.setVisibility(BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal)
+                ? View.VISIBLE : View.GONE);
+        }
     }
 
     /** Shows the try run's outcome: friendly summary first, raw output under it. */
@@ -417,8 +415,6 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
         if (visualCard != null) visualCard.animate().cancel();
         View heroIcon = view.findViewById(R.id.onboarding_hero_icon);
         if (heroIcon != null) heroIcon.animate().cancel();
-        View badge = view.findViewById(R.id.onboarding_hero_badge);
-        if (badge != null) badge.animate().cancel();
         View praise = view.findViewById(R.id.onboarding_praise_container);
         if (praise != null) praise.animate().cancel();
     }

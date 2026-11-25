@@ -256,7 +256,6 @@ public class BabyOnboardingActivity extends AppCompatActivity
     public void onTryRunRequested() {
         final BabyAction action = mAdapter.getTryAction();
         final String command = mAdapter.getTryCommand();
-        final boolean pythonGoal = BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal);
         if (mTryExecutor == null) {
             mTryExecutor = new com.termux.app.baby.BabyCommandExecutor();
         }
@@ -282,10 +281,12 @@ public class BabyOnboardingActivity extends AppCompatActivity
                             BabyOnboardingActivity.this, action.id);
                         BabyPreferences.setFirstActionCompleted(
                             BabyOnboardingActivity.this, true);
-                    } else if (pythonGoal) {
-                        // Python simply is not installed yet — that IS the lesson:
-                        // the home installer adds it in one tap.
-                        summary = getString(R.string.baby_onboarding_try_python_missing);
+                        // The home card carries this first result on arrival.
+                        String oneLine = summary;
+                        int newline = oneLine.indexOf('\n');
+                        if (newline >= 0) oneLine = oneLine.substring(0, newline);
+                        BabyPreferences.setLastResult(
+                            BabyOnboardingActivity.this, action.id, true, oneLine.trim());
                     } else {
                         summary = com.termux.app.baby.BabyErrorTranslator.getFriendlyMessage(
                             BabyOnboardingActivity.this,

@@ -140,7 +140,11 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
             icon.setImageResource(agent.iconResId);
             name.setText(agentName);
             desc.setText(getContext().getString(agent.descResId));
-            commandView.setText(BabyActionCatalog.truncateForDisplay(agent.installCommand));
+            // Agent setups are long multi-step scripts, not learning
+            // material: a truncated fragment teaches nothing, so the row
+            // says honestly that a command does the install (the full
+            // command is reviewable on the run screen before it starts).
+            commandView.setText(R.string.baby_installer_agent_command_note);
 
             boolean installed = executor.isBinaryInstalled(agent.binaryName);
             actionButton.setVisibility(View.VISIBLE);

@@ -22,7 +22,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * JVM screenshot + transition test for the fork's onboarding entry screen
- * (`activity_baby_onboarding.xml`, 7 pages).
+ * (`activity_baby_onboarding.xml`, 3 pages: concept, goal, try).
  *
  * Part of the pre-delivery UI verification standard (no emulator).
  * Golden images live in `src/test/screenshots/`; record with

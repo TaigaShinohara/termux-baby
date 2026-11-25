@@ -149,20 +149,27 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
         recyclerView.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
     }
 
-    /** The unified catalog: curriculum order first, then everything else. */
+    /**
+     * The unified catalog: curriculum order first, then everything else.
+     * Items without a command (the note, the tool installer) are NOT rows:
+     * the note lives on the button at the top, the installer on its home
+     * card — a catalog row promises a real command.
+     */
     @NonNull
     private static List<BabyAction> buildCatalog() {
         List<BabyAction> all = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (String id : BabyActionCatalog.getCurriculumIds()) {
             BabyAction action = BabyActionCatalog.findById(id);
-            if (action != null && seen.add(action.id)) all.add(action);
+            if (action != null && action.commandTemplate != null && seen.add(action.id)) {
+                all.add(action);
+            }
         }
         for (BabyAction action : BabyActionCatalog.getHomeActions()) {
-            if (seen.add(action.id)) all.add(action);
+            if (action.commandTemplate != null && seen.add(action.id)) all.add(action);
         }
         for (BabyAction action : BabyActionCatalog.getHelperRecipes()) {
-            if (seen.add(action.id)) all.add(action);
+            if (action.commandTemplate != null && seen.add(action.id)) all.add(action);
         }
         return all;
     }
@@ -227,10 +234,11 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
                         BabyActionCatalog.getDisplayCommandPreview(action)
                     ));
                 } else {
-                    // The REAL resolved command, honestly truncated — never
-                    // an invented shortened form.
+                    // The display form of the resolved command (the
+                    // teaching form for the Python calculator), honestly
+                    // truncated — never an invented shortened form.
                     String previewCmd = BabyActionCatalog.truncateForDisplay(
-                        BabyActionCatalog.buildSafeCommand(action.commandTemplate, value));
+                        BabyActionCatalog.buildDisplayCommand(action.commandTemplate, value));
                     previewView.setText(ctx.getString(R.string.baby_helper_command_preview, previewCmd));
                 }
             }
@@ -304,6 +312,28 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
             holder.itemView.setContentDescription(title + ". " + sub);
             holder.itemView.setOnClickListener(v -> onClick.onClick(action));
 
+            java.util.List<BabyAction.TokenNote> notes =
+                BabyActionCatalog.getTokenNotes(action.id);
+            holder.meanings.removeAllViews();
+            holder.meanings.setVisibility(View.GONE);
+            if (notes.isEmpty()) {
+                holder.meaningButton.setVisibility(View.GONE);
+            } else {
+                holder.meaningButton.setVisibility(View.VISIBLE);
+                for (BabyAction.TokenNote note : notes) {
+                    TextView line = new TextView(ctx);
+                    line.setText(note.token + " — " + ctx.getString(note.meaningResId));
+                    line.setTextAppearance(ctx, R.style.TextAppearance_Baby_Body);
+                    line.setPadding(0, Math.round(3 * ctx.getResources().getDisplayMetrics().density), 0,
+                        Math.round(3 * ctx.getResources().getDisplayMetrics().density));
+                    holder.meanings.addView(line);
+                }
+                holder.meaningButton.setOnClickListener(v -> {
+                    boolean show = holder.meanings.getVisibility() != View.VISIBLE;
+                    holder.meanings.setVisibility(show ? View.VISIBLE : View.GONE);
+                });
+            }
+
             boolean pinned = BabyPreferences.getPinnedIds(ctx).contains(action.id);
             holder.pinButton.setText(pinned ? R.string.baby_catalog_unpin : R.string.baby_catalog_pin);
             holder.pinButton.setOnClickListener(v -> {
@@ -331,6 +361,8 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
         final TextView subtitle;
         final TextView commandPreview;
         final TextView pinButton;
+        final TextView meaningButton;
+        final LinearLayout meanings;
 
         RecipeViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -339,6 +371,8 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
             subtitle = itemView.findViewById(R.id.recipe_subtitle);
             commandPreview = itemView.findViewById(R.id.recipe_command_preview);
             pinButton = itemView.findViewById(R.id.recipe_pin_button);
+            meaningButton = itemView.findViewById(R.id.recipe_meaning_button);
+            meanings = itemView.findViewById(R.id.recipe_meanings);
         }
     }
 }

@@ -52,6 +52,15 @@ public final class BabyRunSession {
     @Nullable
     public final String sourceId;
 
+    /**
+     * What the UI shows as "the command": normally the executed command
+     * itself, but for the Python calculator it is the teaching form
+     * ({@code python3 -c 'print(式)'}) — the executed safe-evaluator script
+     * is an implementation detail. Set by the controller at creation.
+     */
+    @NonNull
+    public volatile String displayCommand;
+
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final StringBuilder outputBuffer = new StringBuilder();
 
@@ -87,6 +96,7 @@ public final class BabyRunSession {
         this.timeoutSeconds = timeoutSeconds;
         this.displayName = displayName;
         this.sourceId = sourceId;
+        this.displayCommand = command;
     }
 
     public void addListener(@NonNull Listener listener) {

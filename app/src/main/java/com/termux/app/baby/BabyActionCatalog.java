@@ -240,7 +240,7 @@ public final class BabyActionCatalog {
                 return Arrays.asList(
                     new BabyAction.TokenNote("python3", R.string.baby_token_python3),
                     new BabyAction.TokenNote("-c", R.string.baby_token_python_c),
-                    new BabyAction.TokenNote("'式'", R.string.baby_token_python_expr));
+                    new BabyAction.TokenNote("'print(式)'", R.string.baby_token_python_expr));
             case "recipe_pwd":
                 return Collections.singletonList(
                     new BabyAction.TokenNote("pwd", R.string.baby_token_pwd));
@@ -542,6 +542,48 @@ public final class BabyActionCatalog {
     }
 
     /**
+     * Notes for a raw command string (installs, agent setups) that has no
+     * catalog action id: keyed by the leading program, so a {@code pkg
+     * install} run explains its parts just like a catalog recipe does.
+     */
+    @NonNull
+    public static List<BabyAction.TokenNote> getTokenNotesForCommand(@Nullable String command) {
+        if (command == null) return Collections.emptyList();
+        String c = command.trim();
+        if (c.startsWith("pkg install")) {
+            return Arrays.asList(
+                new BabyAction.TokenNote("pkg", R.string.baby_token_pkg),
+                new BabyAction.TokenNote("install", R.string.baby_token_pkg_install),
+                new BabyAction.TokenNote("-y", R.string.baby_token_yes));
+        }
+        if (c.startsWith("pkg update") || c.startsWith("pkg upgrade")) {
+            return getTokenNotes("recipe_update");
+        }
+        if (c.startsWith("python3")) {
+            return Arrays.asList(
+                new BabyAction.TokenNote("python3", R.string.baby_token_python3),
+                new BabyAction.TokenNote("-c", R.string.baby_token_python_c),
+                new BabyAction.TokenNote("'print(式)'", R.string.baby_token_python_expr));
+        }
+        if (c.startsWith("curl")) {
+            return Collections.singletonList(
+                new BabyAction.TokenNote("curl", R.string.baby_token_curl));
+        }
+        if (c.startsWith("npm")) {
+            return Collections.singletonList(
+                new BabyAction.TokenNote("npm", R.string.baby_token_npm));
+        }
+        return Collections.emptyList();
+    }
+
+    /** The teaching form of the Python calculator: what the user would type. */
+    public static final String PYTHON_CALC_DISPLAY_FORM = "python3 -c 'print(式)'";
+
+    private static boolean isPythonCalcTemplate(@Nullable String template) {
+        return SAFE_PYTHON_CALC_TEMPLATE.equals(template);
+    }
+
+    /**
      * Returns a short, readable command preview for display in Command Helper cards.
      */
     @NonNull
@@ -549,13 +591,62 @@ public final class BabyActionCatalog {
         if (action.commandTemplate == null) {
             return "";
         }
+        // The Python calculator's executed command is a long safe-evaluator
+        // script — an implementation detail, not something to learn. Its
+        // display form is the equivalent command the user would type.
+        if (isPythonCalcTemplate(action.commandTemplate)) {
+            return PYTHON_CALC_DISPLAY_FORM;
+        }
         // Always the REAL command — a shortened fake preview would teach a
-        // command that does not exist. Long templates are honestly cut with
-        // an ellipsis at a visible boundary.
+        // command that does not exist. Placeholders render as the word the
+        // learner will type (名前), which the token notes also use. Long
+        // templates are honestly cut with an ellipsis at a visible boundary.
         String preview = action.commandTemplate
-            .replace(PLACEHOLDER_ARG, "<...>")
-            .replace(PLACEHOLDER_GLOB_ARG, "'*...*'");
+            .replace(PLACEHOLDER_ARG, "名前")
+            .replace(PLACEHOLDER_GLOB_ARG, "'*名前*'");
         return truncateForDisplay(preview);
+    }
+
+    /**
+     * The display form of a command built from a template + user input:
+     * the teaching form for the Python calculator, the real resolved
+     * command for everything else.
+     */
+    @NonNull
+    public static String buildDisplayCommand(@NonNull String template, @Nullable String userArg) {
+        if (isPythonCalcTemplate(template)) {
+            String expr = userArg != null ? userArg.trim() : "";
+            return "python3 -c 'print(" + (expr.isEmpty() ? "式" : expr) + ")'";
+        }
+        return buildSafeCommand(template, userArg);
+    }
+
+    /**
+     * The display form of an already-resolved (executed) command: for the
+     * Python calculator, the expression is recovered from the resolved
+     * command's final argument and shown in the teaching form; anything
+     * else displays as itself.
+     */
+    @NonNull
+    public static String getDisplayCommandForResolved(
+        @NonNull BabyAction action, @NonNull String resolvedCommand) {
+        if (!isPythonCalcTemplate(action.commandTemplate)) {
+            return resolvedCommand;
+        }
+        String expr = extractCalcExpression(resolvedCommand);
+        return "python3 -c 'print(" + (expr != null ? expr : "式") + ")'";
+    }
+
+    @Nullable
+    private static String extractCalcExpression(@NonNull String resolvedCommand) {
+        // The template ends with ")' " followed by the shell-quoted input.
+        int marker = resolvedCommand.lastIndexOf(")' ");
+        if (marker < 0) return null;
+        String quoted = resolvedCommand.substring(marker + 3).trim();
+        if (quoted.length() >= 2 && quoted.startsWith("'") && quoted.endsWith("'")) {
+            return quoted.substring(1, quoted.length() - 1).replace("'\\''", "'");
+        }
+        return quoted.isEmpty() ? null : quoted;
     }
 
     /** Flattens newlines and honestly truncates a command for one-line display. */
@@ -617,17 +708,49 @@ public final class BabyActionCatalog {
     }
 
     /**
-     * Guardrail check rejecting obviously destructive commands from auto-running in Baby Mode.
+     * Guardrail check rejecting obviously destructive commands from
+     * auto-running in Baby Mode. Token-based, so split spellings
+     * ({@code rm -r -f}, {@code rm --recursive --force}) are caught just
+     * like the combined {@code rm -rf}.
      */
     public static boolean isSafeForAutoRun(@Nullable String command) {
         if (command == null || command.trim().isEmpty()) {
             return false;
         }
         String lower = command.toLowerCase(Locale.US);
-        return !lower.contains("rm -rf")
-            && !lower.contains("rm -fr")
-            && !lower.contains("mkfs")
-            && !lower.contains("dd if=")
-            && !lower.contains(":(){");
+        if (lower.contains(":(){") || lower.contains("> /dev/")) {
+            return false;
+        }
+        String[] tokens = lower.split("[\\s;|&]+");
+        for (int i = 0; i < tokens.length; i++) {
+            String token = tokens[i];
+            if (token.equals("rm")) {
+                // Any recursive/force flag, in any spelling, blocks the run.
+                for (int j = i + 1; j < tokens.length; j++) {
+                    String arg = tokens[j];
+                    if (arg.equals("--recursive") || arg.equals("--force")) {
+                        return false;
+                    }
+                    if (arg.startsWith("-") && !arg.startsWith("--")
+                        && (arg.indexOf('r') >= 0 || arg.indexOf('f') >= 0)) {
+                        return false;
+                    }
+                }
+            }
+            if (token.equals("mkfs") || token.startsWith("mkfs.")) {
+                return false;
+            }
+            if (token.equals("dd")) {
+                return false;
+            }
+            if (token.equals("shutdown") || token.equals("reboot")
+                || token.equals("poweroff")) {
+                return false;
+            }
+            if (token.startsWith(">") && token.contains("/dev/")) {
+                return false;
+            }
+        }
+        return true;
     }
 }

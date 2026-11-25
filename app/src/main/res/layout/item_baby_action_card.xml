@@ -107,8 +107,9 @@
 
             <ImageButton
                 android:id="@+id/baby_card_rerun"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/baby_card_rerun_cd"
                 android:src="@drawable/ic_baby_rerun"

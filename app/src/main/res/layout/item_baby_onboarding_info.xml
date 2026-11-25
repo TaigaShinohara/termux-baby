@@ -17,32 +17,6 @@
         android:paddingEnd="28dp"
         android:paddingBottom="24dp">
 
-        <!-- Echoed User Choice Pill (Match Declaration page only) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/onboarding_mirror_container"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/baby_primary_container"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="0dp">
-
-            <TextView
-                android:id="@+id/onboarding_mirror_text"
-                style="@style/TextAppearance.Baby.Body"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:paddingStart="18dp"
-                android:paddingTop="8dp"
-                android:paddingEnd="18dp"
-                android:paddingBottom="8dp"
-                android:textColor="@color/baby_on_primary_container" />
-
-        </com.google.android.material.card.MaterialCardView>
-
         <!-- Visual Hero Illustration / Icon -->
         <FrameLayout
             android:id="@+id/onboarding_visual_container"
@@ -72,79 +46,7 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Secondary Accent Badge (e.g. Step 2 check / Page 7 celebration) -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/onboarding_hero_badge"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:layout_gravity="bottom|end"
-                android:visibility="gone"
-                app:cardBackgroundColor="@color/baby_primary"
-                app:cardCornerRadius="21dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/baby_bg"
-                app:strokeWidth="3dp">
-
-                <ImageView
-                    android:id="@+id/onboarding_hero_badge_icon"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:layout_gravity="center"
-                    android:importantForAccessibility="no"
-                    android:scaleType="fitCenter"
-                    app:tint="@color/baby_on_primary" />
-
-            </com.google.android.material.card.MaterialCardView>
-
         </FrameLayout>
-
-        <!-- Step 3 Visual Demo: Mode Switcher Pill Preview (Page 6 only) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/onboarding_pro_toggle_demo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:importantForAccessibility="noHideDescendants"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/baby_surface_subtle"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/baby_border"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="4dp">
-
-                <TextView
-                    android:id="@+id/onboarding_demo_easy"
-                    style="@style/TextAppearance.Baby.Body"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:paddingStart="18dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="18dp"
-                    android:paddingBottom="8dp"
-                    android:text="@string/baby_mode_easy"
-                    android:textColor="@color/baby_text_primary" />
-
-                <TextView
-                    android:id="@+id/onboarding_demo_pro"
-                    style="@style/TextAppearance.Baby.Body"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:paddingStart="18dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="18dp"
-                    android:paddingBottom="8dp"
-                    android:text="@string/baby_mode_pro"
-                    android:textColor="@color/baby_text_secondary" />
-
-            </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
 
         <!-- Single-Claim Headline -->
         <TextView
@@ -164,6 +66,42 @@
             android:gravity="center"
             android:lineSpacingExtra="4dp"
             android:textSize="15sp" />
+
+        <!-- A real home card, shown on page 1: the promise ("every card
+             shows its command") is demonstrated, not just described. -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Baby.ActionCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/baby_action_files_title"
+                    android:textAppearance="@style/TextAppearance.Baby.Title" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="ls -la --color=never"
+                    android:textAppearance="@style/TextAppearance.Baby.Code" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="@string/baby_action_files_sub"
+                    android:textAppearance="@style/TextAppearance.Baby.Caption" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
 

@@ -845,37 +845,56 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
-     * Places the session bar where the current mode expects it. In Easy mode
-     * it is a strip in the root column, directly under the top bar. In Pro
-     * mode the top bar is gone, so as a strip it would sit detached at the
-     * very top of the screen; instead it floats over the terminal's top
-     * start, on the same line as the mode pill at the top end, with a
-     * transparent background (the chips carry their own pill background).
-     * The end margin keeps chips from sliding under the pill.
+     * Places the session bar (and the Pro mode pill) where the current mode
+     * expects them. Easy mode: the bar is a strip in the root column under
+     * the top bar, and the pill floats over the terminal's top end. Pro
+     * mode: BOTH views move into the shared top row in the column — the
+     * bar scrolls in the weight-1 slot, the pill sits after it. Sharing a
+     * row makes overlap impossible by construction (an earlier overlay
+     * placement guessed the pill's width and the chips slid under it) and
+     * the terminal keeps its full height.
      */
     static void placeSessionBarForMode(@NonNull View sessionBar, @Nullable View topBar,
+                                       @Nullable View pill, @Nullable ViewGroup proRow,
                                        @Nullable ViewGroup proContainer, boolean proMode) {
-        ViewGroup parent = (ViewGroup) sessionBar.getParent();
         float density = sessionBar.getResources().getDisplayMetrics().density;
         if (proMode) {
-            if (proContainer == null) return;
-            if (parent != proContainer) {
-                if (parent != null) parent.removeView(sessionBar);
-                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                lp.gravity = Gravity.TOP | Gravity.START;
-                lp.topMargin = Math.round(4 * density);
-                lp.setMarginStart(Math.round(10 * density));
-                lp.setMarginEnd(Math.round(168 * density));
-                proContainer.addView(sessionBar, lp);
+            if (proRow == null) return;
+            if (sessionBar.getParent() != proRow) {
+                ViewGroup old = (ViewGroup) sessionBar.getParent();
+                if (old != null) old.removeView(sessionBar);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                proRow.addView(sessionBar, 0, lp);
             }
             sessionBar.setBackgroundColor(Color.TRANSPARENT);
-            sessionBar.setElevation(2 * density);
+            sessionBar.setElevation(0f);
+            if (pill != null && pill.getParent() != proRow) {
+                ViewGroup old = (ViewGroup) pill.getParent();
+                if (old != null) old.removeView(pill);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Math.round(34 * density));
+                lp.setMarginStart(Math.round(8 * density));
+                proRow.addView(pill, lp);
+            }
+            proRow.setVisibility(View.VISIBLE);
         } else {
+            if (proRow != null) proRow.setVisibility(View.GONE);
+            if (pill != null && proContainer != null && pill.getParent() != proContainer) {
+                ViewGroup old = (ViewGroup) pill.getParent();
+                if (old != null) old.removeView(pill);
+                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Math.round(34 * density));
+                lp.gravity = Gravity.TOP | Gravity.END;
+                lp.topMargin = Math.round(4 * density);
+                lp.setMarginEnd(Math.round(10 * density));
+                proContainer.addView(pill, lp);
+            }
             if (topBar == null || topBar.getParent() == null) return;
             ViewGroup root = (ViewGroup) topBar.getParent();
-            if (parent != root) {
-                if (parent != null) parent.removeView(sessionBar);
+            if (sessionBar.getParent() != root) {
+                ViewGroup old = (ViewGroup) sessionBar.getParent();
+                if (old != null) old.removeView(sessionBar);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 root.addView(sessionBar, root.indexOfChild(topBar) + 1, lp);
@@ -888,8 +907,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void placeSessionBar(boolean proMode) {
         if (mSessionBar == null) return;
+        ViewGroup proRow = findViewById(R.id.baby_pro_top_row);
         ViewGroup proContainer = findViewById(R.id.termux_content_container);
-        placeSessionBarForMode(mSessionBar, mBabyTopBar, proContainer, proMode);
+        placeSessionBarForMode(
+            mSessionBar, mBabyTopBar, mBabyProReturnPill, proRow, proContainer, proMode);
     }
 
     /** Gentle alpha pulse for a live session chip's dot; stops on detach. */

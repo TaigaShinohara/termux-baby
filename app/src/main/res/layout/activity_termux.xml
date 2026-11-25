@@ -90,8 +90,7 @@
          alive. One chip per session; tapping a chip jumps back to that
          session, the chip's close button ends it. Declared here as a strip
          under the top bar (Easy Mode); in Pro Mode TermuxActivity moves it
-         into the content container, floating at the top start on the same
-         line as the mode pill. -->
+         into the shared top row below, next to the mode pill. -->
     <HorizontalScrollView
         android:id="@+id/baby_session_bar"
         android:layout_width="match_parent"
@@ -110,6 +109,25 @@
             android:paddingEnd="10dp"
             android:paddingBottom="6dp" />
     </HorizontalScrollView>
+
+    <!-- Pro Mode top row: the session bar (scrollable, weight 1) and the
+         mode pill share ONE row in the column. Sharing a row makes overlap
+         impossible by construction and keeps the terminal's full height —
+         the earlier floating-overlay placement could cover the pill and
+         the terminal's first line. TermuxActivity moves both views into
+         this row in Pro Mode and back to their declared places in Easy. -->
+    <LinearLayout
+        android:id="@+id/baby_pro_top_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/baby_bg"
+        android:gravity="end|center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone" />
 
     <RelativeLayout
         android:id="@+id/activity_termux_root_relative_layout"

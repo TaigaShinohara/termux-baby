@@ -138,20 +138,42 @@ public final class BabyPreferences {
     /**
      * Returns the BabyAction ID to highlight on the Baby Home screen based on the user's
      * onboarding choice, or null once the user has already completed their first action.
+     * Each goal recommends a DIFFERENT first item.
      */
     @Nullable
     public static String getRecommendedActionId(@NonNull Context context) {
         if (hasCompletedFirstAction(context)) {
             return null;
         }
+        return getGoalLeadActionId(context);
+    }
+
+    /**
+     * The item the user's onboarding goal leads with: it heads the default
+     * home pins and the "next to learn" path (until mastered), so the goal
+     * choice keeps shaping the learning path beyond the first run.
+     */
+    @Nullable
+    public static String getGoalLeadActionId(@NonNull Context context) {
         String goal = getOnboardingGoal(context);
         if (GOAL_TOOLS_PYTHON.equals(goal)) {
             return BabyActionCatalog.ACTION_TRY_PYTHON;
         } else if (GOAL_FILES_DEVICE.equals(goal)) {
             return BabyActionCatalog.ACTION_SEE_FILES;
         } else {
-            return BabyActionCatalog.ACTION_SEE_FILES;
+            return "recipe_find";
         }
+    }
+
+    /** Default home pins per onboarding goal: the goal's lead comes first. */
+    @NonNull
+    public static String defaultPinnedIdsForGoal(@NonNull String goal) {
+        if (GOAL_TOOLS_PYTHON.equals(goal)) {
+            return "try_python,see_files,recipe_pwd,check_network,device_info,install_tools";
+        } else if (GOAL_FILES_DEVICE.equals(goal)) {
+            return "see_files,recipe_pwd,device_info,recipe_find,check_network,install_tools";
+        }
+        return "recipe_pwd,see_files,recipe_find,recipe_date,check_network,install_tools";
     }
 
     // --- Learning progress & home grid state (Easy Mode redesign) ---
@@ -195,7 +217,10 @@ public final class BabyPreferences {
     /** Ordered ids shown on the Easy Home grid (catalog ids and custom ids). */
     @NonNull
     public static java.util.List<String> getPinnedIds(@NonNull Context context) {
-        String raw = getPrefs(context).getString(KEY_PINNED_IDS, DEFAULT_PINNED_IDS);
+        String raw = getPrefs(context).getString(KEY_PINNED_IDS, null);
+        if (raw == null) {
+            raw = defaultPinnedIdsForGoal(getOnboardingGoal(context));
+        }
         java.util.List<String> ids = new java.util.ArrayList<>();
         if (raw != null) {
             for (String part : raw.split(",")) {

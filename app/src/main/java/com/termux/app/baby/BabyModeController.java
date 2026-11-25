@@ -99,6 +99,7 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
     private final ImageView statusIconView;
     private final TextView statusTextView;
     private final LinearLayout gridContainer;
+    private final View homeEmptyView;
     private final View nextSection;
     private final View nextCardRoot;
     private final MaterialButton findActionButton;
@@ -122,6 +123,7 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         this.statusIconView = babyHomeRoot.findViewById(R.id.baby_home_status_icon);
         this.statusTextView = babyHomeRoot.findViewById(R.id.baby_home_status_text);
         this.gridContainer = babyHomeRoot.findViewById(R.id.baby_action_grid);
+        this.homeEmptyView = babyHomeRoot.findViewById(R.id.baby_home_empty);
         this.nextSection = babyHomeRoot.findViewById(R.id.baby_next_section);
         this.nextCardRoot = babyHomeRoot.findViewById(R.id.baby_next_card);
         this.findActionButton = babyHomeRoot.findViewById(R.id.baby_home_find_action_button);
@@ -346,6 +348,29 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
     /** Runs a user-registered custom shortcut command. */
     public void runCustomCommand(@NonNull BabyCustomCommand custom) {
         if (!BabyActionCatalog.isSafeForAutoRun(custom.command)) return;
+        // A custom command is arbitrary text the user pasted or typed:
+        // the very first run asks once, showing the command itself, so
+        // nothing unreviewed ever auto-runs from a card tap.
+        boolean neverRan = BabyPreferences.getRunCount(activity, custom.id) == 0
+            && BabyPreferences.getLastResultSummary(activity, custom.id) == null;
+        if (neverRan) {
+            new AlertDialog.Builder(activity)
+                .setTitle(custom.label)
+                .setMessage(activity.getString(R.string.baby_custom_first_run, custom.command))
+                .setNegativeButton(R.string.baby_helper_input_cancel, null)
+                .setPositiveButton(R.string.baby_helper_run, (dialog, which) ->
+                    runCommandInSheet(
+                        custom.label,
+                        R.drawable.ic_baby_terminal,
+                        custom.command,
+                        BabyAction.OutputFormat.GENERIC,
+                        BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS,
+                        custom.label,
+                        custom.id
+                    ))
+                .show();
+            return;
+        }
         runCommandInSheet(
             custom.label,
             R.drawable.ic_baby_terminal,
@@ -435,7 +460,7 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                 String preview = value.isEmpty()
                     ? BabyActionCatalog.getDisplayCommandPreview(action)
                     : BabyActionCatalog.truncateForDisplay(
-                        BabyActionCatalog.buildSafeCommand(action.commandTemplate, value));
+                        BabyActionCatalog.buildDisplayCommand(action.commandTemplate, value));
                 previewView.setText(ctx.getString(R.string.baby_helper_command_preview, preview));
             }
 
@@ -514,6 +539,11 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         BabyRunSession session = runSessionRegistry.create(
             title, iconResId, command, outputFormat, timeoutSeconds, displayName, sourceId
         );
+        BabyAction source = sourceId != null ? BabyActionCatalog.findById(sourceId) : null;
+        if (source != null) {
+            session.displayCommand =
+                BabyActionCatalog.getDisplayCommandForResolved(source, command);
+        }
         session.start(executor);
         return session;
     }
@@ -550,29 +580,42 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
     }
 
     /**
-     * Records learning progress for finished runs: run counts drive the
-     * cards' mastery fade, and the one-line last result is shown on the card
-     * with an instant re-run button.
+     * Records learning progress for finished runs. Mastery counts SUCCESS
+     * only — a failed run still leaves its one-line result on the card (so
+     * the user sees what happened), but it must not advance the "learned"
+     * fade, and a cancelled run leaves no trace at all.
      */
     private void handleRunSessionCompletions() {
         boolean gridDirty = false;
         for (BabyRunSession session : runSessionRegistry.getSessions()) {
             if (session.isRunning() || session.isCompletionHandled()) continue;
             session.markCompletionHandled();
-            boolean success = session.getState() == BabyRunSession.State.SUCCESS;
-            if (success) {
-                BabyPreferences.setFirstActionCompleted(activity, true);
-            }
-            if (session.sourceId != null && session.getResult() != null) {
-                BabyPreferences.incrementRunCount(activity, session.sourceId);
-                BabyPreferences.setLastResult(
-                    activity, session.sourceId, success, summarizeSession(session));
+            if (recordCompletion(session)) {
                 gridDirty = true;
             }
         }
         if (gridDirty) {
             buildGrid();
         }
+    }
+
+    /**
+     * Records one finished session into the learning state. Returns true
+     * when the grid should rebuild. Package-private for tests.
+     */
+    boolean recordCompletion(@NonNull BabyRunSession session) {
+        if (session.getState() == BabyRunSession.State.CANCELLED) return false;
+        boolean success = session.getState() == BabyRunSession.State.SUCCESS;
+        if (success) {
+            BabyPreferences.setFirstActionCompleted(activity, true);
+        }
+        if (session.sourceId == null || session.getResult() == null) return false;
+        if (success) {
+            BabyPreferences.incrementRunCount(activity, session.sourceId);
+        }
+        BabyPreferences.setLastResult(
+            activity, session.sourceId, success, summarizeSession(session));
+        return true;
     }
 
     @Nullable
@@ -637,6 +680,9 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
     private void buildGrid() {
         gridContainer.removeAllViews();
         List<GridItem> items = resolvePinnedItems();
+        if (homeEmptyView != null) {
+            homeEmptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+        }
         float density = activity.getResources().getDisplayMetrics().density;
         LayoutInflater inflater = LayoutInflater.from(activity);
 
@@ -704,8 +750,16 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         if (item.action != null) {
             title = activity.getString(item.action.titleResId);
             subtitle = activity.getString(item.action.subtitleResId);
-            command = item.action.commandTemplate != null
-                ? BabyActionCatalog.getDisplayCommandPreview(item.action) : null;
+            if (item.action.commandTemplate != null) {
+                command = BabyActionCatalog.getDisplayCommandPreview(item.action);
+            } else if (item.action.actionType == BabyAction.ActionType.TOOL_INSTALLER) {
+                // The installer has no single command, but the card must
+                // not be the one blank card on the grid: show what it does
+                // in command form.
+                command = activity.getString(R.string.baby_card_install_command);
+            } else {
+                command = null;
+            }
             iconResId = item.action.iconResId;
             directRunnable = item.action.actionType == BabyAction.ActionType.DIRECT_COMMAND;
         } else {
@@ -760,13 +814,20 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
             badgeView.setVisibility(View.GONE);
         }
 
+        boolean running = isSourceRunning(item.id);
         String lastSummary = BabyPreferences.getLastResultSummary(activity, item.id);
-        if (lastSummary != null) {
+        if (running) {
+            lastRow.setVisibility(View.VISIBLE);
+            lastResultView.setText(R.string.baby_card_running);
+            rerunButton.setVisibility(View.GONE);
+        } else if (lastSummary != null) {
             lastRow.setVisibility(View.VISIBLE);
             boolean ok = BabyPreferences.getLastResultOk(activity, item.id);
             lastResultView.setText((ok ? "✓ " : "✗ ") + lastSummary);
             rerunButton.setVisibility(directRunnable ? View.VISIBLE : View.GONE);
-            rerunButton.setOnClickListener(v -> runGridItem(item));
+            // Re-run is the shortcut gesture: no sheet, the result comes
+            // back to this card (and the session bar while it runs).
+            rerunButton.setOnClickListener(v -> runGridItemDirect(item));
         } else {
             lastRow.setVisibility(View.GONE);
         }
@@ -775,7 +836,14 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
             + (subtitle.isEmpty() ? "" : ". " + subtitle));
         card.setOnClickListener(v -> {
             animateCardPressIfEnabled(card);
-            runGridItem(item);
+            // A mastered card IS the shortcut: tapping runs it in place.
+            // Before mastery, the tap opens the runner sheet, where the
+            // meanings and the full output teach the command.
+            if (mastered && directRunnable) {
+                runGridItemDirect(item);
+            } else {
+                runGridItem(item);
+            }
         });
         card.setOnLongClickListener(v -> {
             showCardMenu(item, index, total);
@@ -791,17 +859,59 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         }
     }
 
+    private boolean isSourceRunning(@NonNull String sourceId) {
+        for (BabyRunSession session : runSessionRegistry.getSessions()) {
+            if (session.isRunning() && sourceId.equals(session.sourceId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
-     * The curriculum's next unmastered item: the onboarding goal's
-     * recommendation goes first while it is unlearned, then plain
-     * curriculum order.
+     * The shortcut path: starts the run WITHOUT opening the runner sheet.
+     * The session bar shows it while it runs; the result lands back on the
+     * card. Used by the re-run button and by taps on mastered cards.
+     */
+    private void runGridItemDirect(@NonNull GridItem item) {
+        if (item.action != null) {
+            BabyAction action = item.action;
+            if (action.commandTemplate == null) return;
+            startRunSession(
+                activity.getString(action.titleResId),
+                action.iconResId,
+                action.commandTemplate,
+                action.outputFormat,
+                action.timeoutSeconds,
+                activity.getString(action.titleResId),
+                action.id
+            );
+        } else if (item.custom != null) {
+            if (!BabyActionCatalog.isSafeForAutoRun(item.custom.command)) return;
+            startRunSession(
+                item.custom.label,
+                R.drawable.ic_baby_terminal,
+                item.custom.command,
+                BabyAction.OutputFormat.GENERIC,
+                BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS,
+                item.custom.label,
+                item.custom.id
+            );
+        }
+        buildGrid();
+    }
+
+    /**
+     * The curriculum's next unmastered item: the onboarding goal's lead
+     * item goes first while it is unlearned (the goal keeps shaping the
+     * path beyond the first run), then plain curriculum order.
      */
     @Nullable
     private String findNextToLearnId() {
-        String recommended = BabyPreferences.getRecommendedActionId(activity);
-        if (recommended != null
-            && BabyPreferences.getRunCount(activity, recommended) < MASTERY_RUN_COUNT) {
-            return recommended;
+        String lead = BabyPreferences.getGoalLeadActionId(activity);
+        if (lead != null
+            && BabyPreferences.getRunCount(activity, lead) < MASTERY_RUN_COUNT) {
+            return lead;
         }
         for (String id : BabyActionCatalog.getCurriculumIds()) {
             if (BabyPreferences.getRunCount(activity, id) < MASTERY_RUN_COUNT) {
@@ -827,6 +937,10 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
         }
         nextSection.setVisibility(View.VISIBLE);
         bindCard(nextCardRoot, new GridItem(next), -1, -1);
+        // The section heading already says "next to learn"; the card's own
+        // badge would say the same words twice on one screen.
+        View badge = nextCardRoot.findViewById(R.id.baby_card_recommended_badge);
+        if (badge != null) badge.setVisibility(View.GONE);
     }
 
     private void showCardMenu(@NonNull GridItem item, int index, int total) {
@@ -844,6 +958,29 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
             final String cmd = typeableCommand;
             labels.add(activity.getString(R.string.baby_card_menu_type));
             actions.add(() -> hostCallbacks.onTypeInProMode(cmd));
+        }
+        // Meanings are learnable BEFORE running, not only inside the
+        // runner sheet after a run has started.
+        java.util.List<BabyAction.TokenNote> notes = item.action != null
+            ? BabyActionCatalog.getTokenNotes(item.action.id)
+            : BabyActionCatalog.getTokenNotesForCommand(
+                item.custom != null ? item.custom.command : null);
+        if (!notes.isEmpty()) {
+            labels.add(activity.getString(R.string.baby_card_menu_meanings));
+            actions.add(() -> {
+                StringBuilder message = new StringBuilder();
+                for (BabyAction.TokenNote note : notes) {
+                    if (message.length() > 0) message.append('\n');
+                    message.append(note.token).append(" — ")
+                        .append(activity.getString(note.meaningResId));
+                }
+                new AlertDialog.Builder(activity)
+                    .setTitle(item.action != null
+                        ? activity.getString(item.action.titleResId) : item.custom.label)
+                    .setMessage(message.toString())
+                    .setPositiveButton(R.string.baby_runner_close, null)
+                    .show();
+            });
         }
         if (index > 0) {
             labels.add(activity.getString(R.string.baby_card_menu_up));

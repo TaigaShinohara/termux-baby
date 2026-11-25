@@ -242,17 +242,23 @@
     <string name="baby_token_ifconfig">あなたの外向きの番号を教えてくれる場所</string>
     <string name="baby_token_pkg">ツールを管理する命令</string>
     <string name="baby_token_pkg_update">一覧を新しくする</string>
+    <string name="baby_token_pkg_install">ツールを入れる</string>
+    <string name="baby_token_npm">Node.jsのツールを入れる仕組み</string>
     <string name="baby_token_yes">質問には全部「はい」と答える</string>
     <string name="baby_token_python3">Python（プログラミング言語）を動かす</string>
     <string name="baby_token_python_c">次の文をプログラムとして実行する</string>
-    <string name="baby_token_python_expr">計算する式（安全な計算だけに制限されている）</string>
+    <string name="baby_token_python_expr">式を計算して答えを表示する（安全な計算だけ）</string>
     <!-- Easy Mode redesign: home, cards, runner, catalog -->
     <string name="baby_home_next_title">つぎに覚える</string>
     <string name="baby_home_add_custom">自分のコマンドを追加</string>
     <string name="baby_home_find_action">コマンド図鑑をひらく</string>
     <string name="baby_card_mastered">おぼえた</string>
+    <string name="baby_card_running">実行中…</string>
+    <string name="baby_card_install_command">pkg install …</string>
+    <string name="baby_home_empty">ホームは空です。下の「コマンド図鑑」から追加できます。</string>
     <string name="baby_card_rerun_cd">もう一度実行</string>
     <string name="baby_card_menu_type">ターミナルで自分で打つ</string>
+    <string name="baby_card_menu_meanings">部分の意味を見る</string>
     <string name="baby_card_menu_up">前へ移動</string>
     <string name="baby_card_menu_down">後ろへ移動</string>
     <string name="baby_card_menu_unpin">ホームから外す</string>
@@ -264,6 +270,7 @@
     <string name="baby_custom_add">追加する</string>
     <string name="baby_custom_unsafe">このコマンドは安全のため追加できません</string>
     <string name="baby_custom_empty">名前とコマンドを入れてね</string>
+    <string name="baby_custom_first_run">自分のコマンドのはじめての実行です。これを実行しますか？\n\n%1$s</string>
     <string name="baby_runner_tokens_title">コマンドの意味（タップで表示）</string>
     <string name="baby_runner_type_myself">ターミナルで自分で打つ</string>
     <string name="baby_runner_run_in_terminal">ターミナルで実行</string>
@@ -271,11 +278,13 @@
     <string name="baby_catalog_note">メモを書く</string>
     <string name="baby_catalog_pin">ピン留め</string>
     <string name="baby_catalog_unpin">ピンを外す</string>
+    <string name="baby_catalog_meanings">部分の意味</string>
+    <string name="baby_installer_agent_command_note">コマンドで導入します（実行画面で全文が見られます）</string>
 
     <string name="baby_onboarding_try_title">ためしに1つ、実行してみよう</string>
     <string name="baby_onboarding_try_body">これが実際のコマンドです。ボタンを押すと、本当に動きます。</string>
     <string name="baby_onboarding_try_run">実行してみる</string>
     <string name="baby_onboarding_try_running">動かしています…</string>
     <string name="baby_onboarding_try_done">これが「コマンドを実行する」ということです。ホームでも同じ流れで進みます。</string>
-    <string name="baby_onboarding_try_python_missing">Pythonはまだ入っていませんでした。ホームの「ツールを入れる」から、1タップで入ります。</string>
+    <string name="baby_onboarding_try_python_next">Python本体は、ホームの「ツールを入れる」から1タップで入ります。ここではまず、コマンドが動く感じを1回体験してみましょう。</string>
 </resources>

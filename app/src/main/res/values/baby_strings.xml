@@ -248,17 +248,23 @@
     <string name="baby_token_ifconfig">A place that tells you your public address</string>
     <string name="baby_token_pkg">The command that manages tools</string>
     <string name="baby_token_pkg_update">Refresh the list</string>
+    <string name="baby_token_pkg_install">Install a tool</string>
+    <string name="baby_token_npm">Installs tools for Node.js</string>
     <string name="baby_token_yes">Answer yes to every question</string>
     <string name="baby_token_python3">Run Python (a programming language)</string>
     <string name="baby_token_python_c">Run the next text as a program</string>
-    <string name="baby_token_python_expr">The expression to calculate (restricted to safe math)</string>
+    <string name="baby_token_python_expr">Calculate the expression and show the answer (safe math only)</string>
     <!-- Easy Mode redesign: home, cards, runner, catalog -->
     <string name="baby_home_next_title">Next to learn</string>
     <string name="baby_home_add_custom">Add your own command</string>
     <string name="baby_home_find_action">Open the command catalog</string>
     <string name="baby_card_mastered">Learned</string>
+    <string name="baby_card_running">Running…</string>
+    <string name="baby_card_install_command">pkg install …</string>
+    <string name="baby_home_empty">Home is empty. You can add cards from the command catalog below.</string>
     <string name="baby_card_rerun_cd">Run again</string>
     <string name="baby_card_menu_type">Type it myself in the terminal</string>
+    <string name="baby_card_menu_meanings">See what the parts mean</string>
     <string name="baby_card_menu_up">Move up</string>
     <string name="baby_card_menu_down">Move down</string>
     <string name="baby_card_menu_unpin">Remove from home</string>
@@ -270,6 +276,7 @@
     <string name="baby_custom_add">Add</string>
     <string name="baby_custom_unsafe">This command cannot be added for safety</string>
     <string name="baby_custom_empty">Please enter a name and a command</string>
+    <string name="baby_custom_first_run">This is the first run of your own command. Run this?\n\n%1$s</string>
     <string name="baby_runner_tokens_title">What the parts mean (tap one)</string>
     <string name="baby_runner_type_myself">Type it myself in the terminal</string>
     <string name="baby_runner_run_in_terminal">Run in terminal</string>
@@ -277,11 +284,13 @@
     <string name="baby_catalog_note">Write a note</string>
     <string name="baby_catalog_pin">Pin</string>
     <string name="baby_catalog_unpin">Unpin</string>
+    <string name="baby_catalog_meanings">What the parts mean</string>
+    <string name="baby_installer_agent_command_note">Installed by a command (shown in full on the run screen)</string>
 
     <string name="baby_onboarding_try_title">Try running one, right now</string>
     <string name="baby_onboarding_try_body">This is a real command. Tap the button and it really runs.</string>
     <string name="baby_onboarding_try_run">Run it</string>
     <string name="baby_onboarding_try_running">Running…</string>
     <string name="baby_onboarding_try_done">That is what running a command means. Home works the same way.</string>
-    <string name="baby_onboarding_try_python_missing">Python is not installed yet. You can add it in one tap from "Install tools" on Home.</string>
+    <string name="baby_onboarding_try_python_next">Python itself installs in one tap from "Install tools" on Home. Here, just feel one command run.</string>
 </resources>

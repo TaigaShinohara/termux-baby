@@ -100,6 +100,20 @@ public class BabyActionCatalogTest {
     }
 
     @Test
+    public void isSafeForAutoRun_blocksSplitSpellingsToo() {
+        // Split flags and long options must not slip past the guard.
+        assertFalse(BabyActionCatalog.isSafeForAutoRun("rm -r -f ~/docs"));
+        assertFalse(BabyActionCatalog.isSafeForAutoRun("rm --recursive --force ~/docs"));
+        assertFalse(BabyActionCatalog.isSafeForAutoRun("rm -f one.log"));
+        assertFalse(BabyActionCatalog.isSafeForAutoRun("shutdown now"));
+        assertFalse(BabyActionCatalog.isSafeForAutoRun("reboot"));
+        // A plain single-file remove and ordinary commands still pass.
+        assertTrue(BabyActionCatalog.isSafeForAutoRun("rm one.log"));
+        assertTrue(BabyActionCatalog.isSafeForAutoRun("ls -la && rm one.log"));
+        assertTrue(BabyActionCatalog.isSafeForAutoRun("git --version"));
+    }
+
+    @Test
     public void homeActions_hasSixUniqueValidSafeCards() {
         List<BabyAction> actions = BabyActionCatalog.getHomeActions();
         assertEquals(6, actions.size());
