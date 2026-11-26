@@ -3,6 +3,7 @@ package com.termux.app.baby;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.os.Build;
+import android.util.TypedValue;
 import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -19,13 +20,15 @@ import androidx.core.widget.ImageViewCompat;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.termux.R;
 
 /**
  * Calm, beginner-friendly BottomSheetDialog that displays a {@link BabyRunSession}.
  * The learning loop lives here: the command is always visible at the top with
- * tappable part-by-part meanings, the friendly summary is an interpretation
- * layered over the always-visible raw output, and the graduation row offers
+ * tappable part-by-part meanings, the friendly summary is the hero of the
+ * result, the raw output sits one tap away behind 「生の結果をくわしく見る」
+ * (auto-opened on failure), and the graduation row offers
  * "run in terminal" vs "type it myself" (typed, not executed).
  *
  * <p>The sheet is only a view: the session owns the execution, so closing this
@@ -67,6 +70,11 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
     private final TextView tokenMeaningView;
     private final TextView commandTextView;
     private final TextView rawOutputTextView;
+    private final TextView rawToggleView;
+    private final View rawScrollView;
+    private final LinearProgressIndicator usageBar;
+    private final float defaultSummaryTextSizePx;
+    private boolean rawExpanded;
     private final View graduationRow;
     private final MaterialButton openProButton;
     private final MaterialButton typeMyselfButton;
@@ -123,6 +131,11 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         tokenMeaningView = root.findViewById(R.id.runner_token_meaning);
         commandTextView = root.findViewById(R.id.runner_command_text);
         rawOutputTextView = root.findViewById(R.id.runner_raw_output_text);
+        rawToggleView = root.findViewById(R.id.runner_raw_toggle);
+        rawScrollView = root.findViewById(R.id.runner_raw_scroll);
+        usageBar = root.findViewById(R.id.runner_usage_bar);
+        defaultSummaryTextSizePx = summaryTextView.getTextSize();
+        rawToggleView.setOnClickListener(v -> setRawExpanded(!rawExpanded));
         graduationRow = root.findViewById(R.id.runner_graduation_row);
         openProButton = root.findViewById(R.id.runner_open_pro_button);
         typeMyselfButton = root.findViewById(R.id.runner_type_myself_button);
@@ -262,6 +275,21 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         }
     }
 
+    /** Collapses/expands the raw output block and swaps the toggle label. */
+    private void setRawExpanded(boolean expanded) {
+        rawExpanded = expanded;
+        rawScrollView.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        rawToggleView.setText(expanded
+            ? R.string.baby_runner_raw_hide
+            : R.string.baby_runner_raw_show);
+    }
+
+    /** Hides the storage meter and restores the summary's normal size. */
+    private void resetSummaryChrome() {
+        usageBar.setVisibility(View.GONE);
+        summaryTextView.setTextSize(TypedValue.COMPLEX_UNIT_PX, defaultSummaryTextSizePx);
+    }
+
     /**
      * The graduation row acts on the session, which would cancel a run
      * still in flight — so it is only offered once the run has finished
@@ -285,6 +313,8 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         titleView.setText(newSession.title);
         commandTextView.setText(newSession.displayCommand);
         rawOutputTextView.setText(newSession.getOutputText());
+        setRawExpanded(false);
+        resetSummaryChrome();
 
         bindTokens(newSession.sourceId, newSession.command);
         recoveryButton.setVisibility(View.GONE);
@@ -338,6 +368,8 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         statusHeadlineView.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_text_primary));
         summaryTextView.setVisibility(View.VISIBLE);
         summaryTextView.setText(friendlyMessage);
+        resetSummaryChrome();
+        setRawExpanded(false);
 
         recoveryButton.setVisibility(View.VISIBLE);
         recoveryButton.setText(R.string.baby_runner_install_now);
@@ -366,6 +398,7 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         statusHeadlineView.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_text_primary));
         summaryTextView.setText("");
         summaryTextView.setVisibility(View.GONE);
+        resetSummaryChrome();
         primaryButton.setText(R.string.baby_runner_cancel);
         updateGraduationRow(false);
     }
@@ -407,6 +440,25 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             statusHeadlineView.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_success));
             summaryTextView.setVisibility(View.VISIBLE);
             summaryTextView.setText(friendlyText);
+            if (summary.kind == BabyOutputFormatter.SummaryKind.DEVICE_INFO) {
+                // The free-space answer is the hero of its sheet: bigger
+                // type, and the used percent as a meter (warning colour
+                // once the phone is nearly full).
+                summaryTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f);
+                if (summary.usedPercent >= 0) {
+                    usageBar.setVisibility(View.VISIBLE);
+                    usageBar.setProgressCompat(summary.usedPercent, false);
+                    usageBar.setIndicatorColor(ContextCompat.getColor(
+                        getContext(),
+                        summary.usedPercent >= 90
+                            ? R.color.baby_warning
+                            : R.color.baby_primary));
+                } else {
+                    usageBar.setVisibility(View.GONE);
+                }
+            } else {
+                resetSummaryChrome();
+            }
 
             recoveryButton.setVisibility(View.GONE);
             secondaryButton.setVisibility(View.VISIBLE);
@@ -444,6 +496,10 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         String friendlyMessage = BabyErrorTranslator.getFriendlyMessage(getContext(), error);
         summaryTextView.setVisibility(View.VISIBLE);
         summaryTextView.setText(friendlyMessage);
+        resetSummaryChrome();
+        // On failure the raw detail IS the explanation — open it instead
+        // of leaving the beginner with only the friendly line.
+        setRawExpanded(true);
 
         if (rawOutput.isEmpty()) {
             rawOutputTextView.setText(R.string.baby_runner_empty_output);

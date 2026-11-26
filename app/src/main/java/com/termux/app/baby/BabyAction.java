@@ -29,6 +29,7 @@ public final class BabyAction {
         DEVICE_INFO,
         PYTHON,
         INSTALL,
+        UPDATE,
         GENERIC
     }
 

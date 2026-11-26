@@ -34,6 +34,7 @@ public final class BabyOutputFormatter {
         DEVICE_INFO,
         PYTHON_OK,
         INSTALL_OK,
+        UPDATE_OK,
         GENERIC_OK,
         GENERIC_EMPTY
     }
@@ -57,6 +58,11 @@ public final class BabyOutputFormatter {
         public final String availableSpace;
         @Nullable
         public final String previewText;
+        /** Total storage size (e.g. "228G") for DEVICE_INFO; null otherwise. */
+        @Nullable
+        public final String totalSpace;
+        /** Used storage percent (0-100) for DEVICE_INFO; -1 when unknown. */
+        public final int usedPercent;
 
         public ParsedSummary(
             @NonNull SummaryKind kind,
@@ -69,6 +75,23 @@ public final class BabyOutputFormatter {
             @Nullable String availableSpace,
             @Nullable String previewText
         ) {
+            this(kind, totalItems, dirCount, fileCount, sampleItems, pingAvgMs,
+                architecture, availableSpace, previewText, null, -1);
+        }
+
+        public ParsedSummary(
+            @NonNull SummaryKind kind,
+            int totalItems,
+            int dirCount,
+            int fileCount,
+            @NonNull List<String> sampleItems,
+            @Nullable String pingAvgMs,
+            @Nullable String architecture,
+            @Nullable String availableSpace,
+            @Nullable String previewText,
+            @Nullable String totalSpace,
+            int usedPercent
+        ) {
             this.kind = kind;
             this.totalItems = totalItems;
             this.dirCount = dirCount;
@@ -78,6 +101,8 @@ public final class BabyOutputFormatter {
             this.architecture = architecture;
             this.availableSpace = availableSpace;
             this.previewText = previewText;
+            this.totalSpace = totalSpace;
+            this.usedPercent = usedPercent;
         }
     }
 
@@ -121,6 +146,11 @@ public final class BabyOutputFormatter {
                 return new ParsedSummary(
                     SummaryKind.INSTALL_OK, 0, 0, 0, Collections.emptyList(),
                     null, null, null, extractFirstLines(stdout, 2)
+                );
+            case UPDATE:
+                return new ParsedSummary(
+                    SummaryKind.UPDATE_OK, 0, 0, 0, Collections.emptyList(),
+                    null, null, null, null
                 );
             case GENERIC:
             default:
@@ -211,38 +241,34 @@ public final class BabyOutputFormatter {
 
     @NonNull
     private static ParsedSummary parseDeviceInfo(@NonNull String stdout) {
-        String arch = "-";
-        String avail = "-";
+        // The command is `uname -m && df -h "$HOME"`. The uname line is
+        // deliberately NOT surfaced: "aarch64" means nothing to a beginner
+        // (user feedback 2026-11-25 — the result screen read as pure
+        // jargon). The answer this action exists for is the free space.
+        String size = null;
+        String avail = null;
+        int usedPercent = -1;
 
-        String[] lines = stdout.split("\\r?\\n");
-        List<String> nonEmpty = new ArrayList<>();
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (!trimmed.isEmpty()) {
-                nonEmpty.add(trimmed);
-            }
-        }
-
-        if (!nonEmpty.isEmpty()) {
-            arch = nonEmpty.get(0);
-        }
-        // Look for df -h data line (skip Filesystem header)
-        for (int i = nonEmpty.size() - 1; i >= 1; i--) {
-            String line = nonEmpty.get(i);
-            if (line.startsWith("Filesystem")) {
-                continue;
-            }
-            String[] cols = WHITESPACE_SPLIT.split(line);
-            if (cols.length >= 4) {
-                // Filesystem Size Used Avail Use% Mounted
+        for (String rawLine : stdout.split("\\r?\\n")) {
+            String[] cols = WHITESPACE_SPLIT.split(rawLine.trim());
+            // df data line: Filesystem Size Used Avail Use% Mounted on —
+            // identified by the numeric percent column (the header's
+            // "Use%" does not match). The last match wins.
+            if (cols.length >= 5 && cols[4].matches("\\d+%")) {
+                size = cols[1];
                 avail = cols[3];
-                break;
+                try {
+                    usedPercent = Integer.parseInt(
+                        cols[4].substring(0, cols[4].length() - 1));
+                } catch (NumberFormatException ignored) {
+                    usedPercent = -1;
+                }
             }
         }
 
         return new ParsedSummary(
             SummaryKind.DEVICE_INFO, 0, 0, 0, Collections.emptyList(),
-            null, arch, avail, null
+            null, null, avail, null, size, usedPercent
         );
     }
 
@@ -345,12 +371,28 @@ public final class BabyOutputFormatter {
                 return context.getString(R.string.baby_summary_network_online);
             case NETWORK_OFFLINE:
                 return context.getString(R.string.baby_summary_network_offline);
-            case DEVICE_INFO:
+            case DEVICE_INFO: {
+                if (summary.availableSpace == null) {
+                    return context.getString(R.string.baby_summary_generic_done);
+                }
+                if (summary.totalSpace != null && summary.usedPercent >= 0) {
+                    return context.getString(
+                        R.string.baby_summary_device_info,
+                        summary.availableSpace, summary.totalSpace, summary.usedPercent
+                    );
+                }
+                if (summary.totalSpace != null) {
+                    return context.getString(
+                        R.string.baby_summary_device_info_no_pct,
+                        summary.availableSpace, summary.totalSpace
+                    );
+                }
                 return context.getString(
-                    R.string.baby_summary_device_info,
-                    summary.architecture != null ? summary.architecture : "-",
-                    summary.availableSpace != null ? summary.availableSpace : "-"
+                    R.string.baby_summary_device_info_avail_only, summary.availableSpace
                 );
+            }
+            case UPDATE_OK:
+                return context.getString(R.string.baby_summary_update_done);
             case PYTHON_OK: {
                 String headline = context.getString(R.string.baby_summary_python_hello);
                 if (summary.previewText != null && !summary.previewText.isEmpty()) {

@@ -327,7 +327,10 @@ public final class BabyActionCatalog {
             R.drawable.ic_baby_device,
             BabyAction.ActionType.DIRECT_COMMAND,
             BabyAction.Category.LEARN,
-            "date",
+            // Plain `date` answers in English ("Thu Nov 26 ..."), which a
+            // Japanese beginner cannot read; the numeric format is the
+            // same command and reads at a glance in any locale.
+            "date '+%Y/%m/%d %H:%M:%S'",
             BabyAction.OutputFormat.GENERIC,
             0,
             0,
@@ -354,7 +357,7 @@ public final class BabyActionCatalog {
             BabyAction.ActionType.DIRECT_COMMAND,
             BabyAction.Category.TOOLS,
             "pkg update -y",
-            BabyAction.OutputFormat.GENERIC,
+            BabyAction.OutputFormat.UPDATE,
             0,
             0,
             BabyCommandExecutor.INSTALL_TIMEOUT_SECONDS

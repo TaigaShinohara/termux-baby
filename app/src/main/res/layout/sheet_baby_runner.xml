@@ -168,6 +168,19 @@
             android:layout_marginTop="10dp"
             android:textAppearance="@style/TextAppearance.Baby.Body"
             android:visibility="gone" />
+
+        <!-- Storage meter, shown only when the result carries a used
+             percent (the free-space answer): the answer as a picture. -->
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/runner_usage_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            app:indicatorColor="@color/baby_primary"
+            app:trackColor="@color/baby_success_container"
+            app:trackCornerRadius="4dp"
+            app:trackThickness="8dp" />
     </LinearLayout>
 
     <!-- Optional Recovery / Install CTA -->
@@ -182,21 +195,30 @@
         app:icon="@drawable/ic_baby_install"
         app:iconGravity="textStart" />
 
-    <!-- Raw output, always visible (learning step 2: pair the command with
-         its real result). -->
+    <!-- Raw output, one tap away (learning step 2: pair the command with
+         its real result) but COLLAPSED by default: shown always-visible,
+         the raw table drowned the friendly answer and the sheet read as
+         pure jargon (user feedback 2026-11-25). Failures auto-expand it,
+         because there the detail is the explanation. -->
     <TextView
+        android:id="@+id/runner_raw_toggle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:text="@string/baby_runner_output_title"
-        android:textAppearance="@style/TextAppearance.Baby.Caption" />
+        android:layout_marginTop="6dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:text="@string/baby_runner_raw_show"
+        android:textAppearance="@style/TextAppearance.Baby.Body"
+        android:textColor="@color/baby_primary" />
 
     <ScrollView
+        android:id="@+id/runner_raw_scroll"
         android:layout_width="match_parent"
         android:layout_height="150dp"
-        android:layout_marginTop="6dp"
         android:background="@drawable/baby_code_box"
-        android:padding="10dp">
+        android:padding="10dp"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/runner_raw_output_text"

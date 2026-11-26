@@ -52,7 +52,12 @@
     <string name="baby_summary_network_online">You are connected to the internet.</string>
     <string name="baby_summary_network_online_ms">Connected to the internet (response %1$s ms).</string>
     <string name="baby_summary_network_offline">It looks like you are offline. Please check Wi-Fi or mobile data.</string>
-    <string name="baby_summary_device_info">This phone\'s type: %1$s\nFree space: %2$s</string>
+    <string name="baby_summary_device_info">%1$s free (of %2$s total, %3$d%% used)</string>
+    <string name="baby_summary_device_info_no_pct">%1$s free (of %2$s total)</string>
+    <string name="baby_summary_device_info_avail_only">%1$s free</string>
+    <string name="baby_summary_update_done">The tool catalog is up to date</string>
+    <string name="baby_runner_raw_show">See the raw output</string>
+    <string name="baby_runner_raw_hide">Hide the raw output</string>
     <string name="baby_summary_python_hello">Python ran your first message successfully!</string>
     <string name="baby_summary_python_missing">Python is not installed yet. Tap below to install it with one tap.</string>
     <string name="baby_summary_install_done">%1$s is ready to use!</string>

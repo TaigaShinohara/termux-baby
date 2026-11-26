@@ -92,7 +92,7 @@ public class BabyOutputFormatterTest {
     }
 
     @Test
-    public void parseDeviceInfo_extractsArchitectureAndAvailableSpace() {
+    public void parseDeviceInfo_extractsSpaceFiguresNotArchitecture() {
         String deviceOutput = "aarch64\n"
             + "Filesystem      Size  Used Avail Use% Mounted on\n"
             + "/dev/block/dm-5 110G   68G   42G  62% /data\n";
@@ -100,14 +100,28 @@ public class BabyOutputFormatterTest {
             BabyAction.OutputFormat.DEVICE_INFO, deviceOutput, "", 0
         );
         assertEquals(BabyOutputFormatter.SummaryKind.DEVICE_INFO, summary.kind);
-        assertEquals("aarch64", summary.architecture);
+        // The architecture is deliberately not surfaced ("aarch64" is
+        // jargon); the answer is the space figures.
+        assertNull(summary.architecture);
         assertEquals("42G", summary.availableSpace);
+        assertEquals("110G", summary.totalSpace);
+        assertEquals(62, summary.usedPercent);
 
         BabyOutputFormatter.ParsedSummary empty = BabyOutputFormatter.parse(
             BabyAction.OutputFormat.DEVICE_INFO, "", "", 0
         );
-        assertEquals("-", empty.architecture);
-        assertEquals("-", empty.availableSpace);
+        assertNull(empty.availableSpace);
+        assertNull(empty.totalSpace);
+        assertEquals(-1, empty.usedPercent);
+    }
+
+    @Test
+    public void parseUpdate_isItsOwnKind() {
+        BabyOutputFormatter.ParsedSummary summary = BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.UPDATE, "Get:1 https://mirror ...\nReading package lists...\n", "", 0
+        );
+        assertEquals(BabyOutputFormatter.SummaryKind.UPDATE_OK, summary.kind);
+        assertNull(summary.previewText);
     }
 
     @Test

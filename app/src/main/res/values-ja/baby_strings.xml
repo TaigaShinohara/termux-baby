@@ -52,7 +52,12 @@
     <string name="baby_summary_network_online">インターネットにつながっています。</string>
     <string name="baby_summary_network_online_ms">インターネットにつながっています（応答 %1$s ms）。</string>
     <string name="baby_summary_network_offline">インターネットにつながっていないようです。Wi-Fiや通信を確認してみてください。</string>
-    <string name="baby_summary_device_info">このスマホの種類: %1$s\n空き容量: %2$s</string>
+    <string name="baby_summary_device_info">あと %1$s あいてる（ぜんぶで %2$s・%3$d%% 使用中）</string>
+    <string name="baby_summary_device_info_no_pct">あと %1$s あいてる（ぜんぶで %2$s）</string>
+    <string name="baby_summary_device_info_avail_only">あと %1$s あいてる</string>
+    <string name="baby_summary_update_done">道具のカタログを新しくしました</string>
+    <string name="baby_runner_raw_show">生の結果をくわしく見る</string>
+    <string name="baby_runner_raw_hide">生の結果をとじる</string>
     <string name="baby_summary_python_hello">Pythonが元気に動きました！</string>
     <string name="baby_summary_python_missing">まだPythonが入っていないようです。下のボタンから1タップで入れられます。</string>
     <string name="baby_summary_install_done">%1$s を使う準備ができました！</string>
