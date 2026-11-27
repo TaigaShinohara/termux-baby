@@ -54,9 +54,28 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         );
     }
 
+    /**
+     * Asks the user to confirm a dangerous command before a sheet-internal
+     * re-run. Implemented by {@code BabyModeController}; when unset, re-runs
+     * proceed without asking (unit tests, previews).
+     */
+    public interface DangerGate {
+        void confirmDanger(
+            @NonNull String command,
+            @NonNull String matchedPattern,
+            @NonNull Runnable onConfirmed
+        );
+    }
+
     private final RunSessionHost runSessionHost;
     @Nullable
     private final BabyCommandExecutor.ProTerminalBridge proTerminalBridge;
+    @Nullable
+    private DangerGate dangerGate;
+
+    public void setDangerGate(@Nullable DangerGate dangerGate) {
+        this.dangerGate = dangerGate;
+    }
 
     private final ImageView actionIconView;
     private final TextView titleView;
@@ -173,7 +192,26 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
 
         secondaryButton.setOnClickListener(v -> {
             BabyRunSession current = session;
-            if (current != null) {
+            if (current == null) return;
+            // A re-run from inside the sheet is a fresh run: a dangerous
+            // command asks again, exactly like the first run did.
+            String danger = null;
+            if (dangerGate != null
+                && BabyPreferences.isDangerConfirmEnabled(getContext())) {
+                danger = BabyActionCatalog.assessDanger(
+                    current.command, BabyPreferences.getDangerPatterns(getContext()));
+            }
+            if (danger != null) {
+                dangerGate.confirmDanger(current.command, danger, () -> startExecution(
+                    current.title,
+                    current.iconResId,
+                    current.command,
+                    current.outputFormat,
+                    current.timeoutSeconds,
+                    current.displayName,
+                    current.sourceId
+                ));
+            } else {
                 startExecution(
                     current.title,
                     current.iconResId,
@@ -209,28 +247,10 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
         @Nullable String actionDisplayName,
         @Nullable String sourceId
     ) {
-        if (!BabyActionCatalog.isSafeForAutoRun(command)) {
-            detachSession();
-            actionIconView.setImageResource(iconResId);
-            titleView.setText(title);
-            BabyAction source = sourceId != null ? BabyActionCatalog.findById(sourceId) : null;
-            commandTextView.setText(source != null
-                ? BabyActionCatalog.getDisplayCommandForResolved(source, command)
-                : command);
-            rawOutputTextView.setText("");
-            bindTokens(sourceId, command);
-            recoveryButton.setVisibility(View.GONE);
-            secondaryButton.setVisibility(View.GONE);
-            showErrorState(
-                new BabyErrorTranslator.TranslatedError(
-                    BabyErrorTranslator.ErrorCategory.UNKNOWN, null, null
-                ),
-                ""
-            );
-            if (!isShowing()) show();
-            return;
-        }
-
+        // No safety block here: dangerous commands are confirmed by the
+        // controller's danger gate before this sheet opens (and again by
+        // the DangerGate on sheet-internal re-runs), never silently
+        // refused with a generic error.
         BabyRunSession created = runSessionHost.startRunSession(
             title, iconResId, command, outputFormat, timeoutSeconds, actionDisplayName, sourceId
         );
@@ -524,7 +544,9 @@ public final class BabyCommandRunnerSheet extends BottomSheetDialog {
             recoveryButton.setVisibility(View.GONE);
         }
 
-        secondaryButton.setVisibility(View.VISIBLE);
+        // The re-run button restarts the bound session; with no session
+        // bound it would be a dead button, so keep it hidden then.
+        secondaryButton.setVisibility(session != null ? View.VISIBLE : View.GONE);
         primaryButton.setText(R.string.baby_runner_close);
         updateGraduationRow(true);
     }

@@ -18,6 +18,38 @@ public class BabyOutputFormatterTest {
     }
 
     @Test
+    public void stripAnsi_removesOscAndCharsetEscapes() {
+        // OSC window title terminated by BEL.
+        assertEquals("hello", BabyOutputFormatter.stripAnsi("\u001B]0;my title\u0007hello"));
+        // OSC hyperlink terminated by ESC backslash.
+        assertEquals("link", BabyOutputFormatter.stripAnsi(
+            "\u001B]8;;https://example.com\u001B\\link\u001B]8;;\u001B\\"));
+        // Charset designation and other single-character escapes.
+        assertEquals("abc", BabyOutputFormatter.stripAnsi("\u001B(Babc"));
+    }
+
+    @Test
+    public void parse_nonZeroExit_isFailedForAllFormatsExceptNetwork() {
+        // A failed run must never be summarised as a success, whatever
+        // the format (NETWORK keeps its own offline mapping).
+        assertEquals(BabyOutputFormatter.SummaryKind.FAILED, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.FILES, "drwx------ 2 u0_a1 u0_a1 4096 Jan  1 12:00 notes\n",
+            "ls: cannot open directory: Permission denied", 1).kind);
+        assertEquals(BabyOutputFormatter.SummaryKind.FAILED, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.GENERIC, "some output", "", 2).kind);
+        assertEquals(BabyOutputFormatter.SummaryKind.FAILED, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.INSTALL, "", "E: Unable to locate package", 100).kind);
+        assertEquals(BabyOutputFormatter.SummaryKind.FAILED, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.PYTHON, "", "SyntaxError: invalid syntax", 1).kind);
+        assertEquals(BabyOutputFormatter.SummaryKind.FAILED, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.UPDATE, "", "Err:1 https://mirror", 1).kind);
+        assertEquals(BabyOutputFormatter.SummaryKind.FAILED, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.DEVICE_INFO, "", "", 1).kind);
+        assertEquals(BabyOutputFormatter.SummaryKind.NETWORK_OFFLINE, BabyOutputFormatter.parse(
+            BabyAction.OutputFormat.NETWORK, "", "", 1).kind);
+    }
+
+    @Test
     public void parseFiles_handlesEmptyAndDotOnlyListings() {
         BabyOutputFormatter.ParsedSummary empty = BabyOutputFormatter.parse(
             BabyAction.OutputFormat.FILES, "", "", 0

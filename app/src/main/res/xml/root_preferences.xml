@@ -24,6 +24,18 @@
             app:title="@string/baby_pref_replay_onboarding_title"
             app:summary="@string/baby_pref_replay_onboarding_summary"
             app:persistent="false" />
+
+        <SwitchPreferenceCompat
+            app:key="baby_danger_confirm"
+            app:title="@string/baby_pref_danger_confirm_title"
+            app:summary="@string/baby_pref_danger_confirm_summary"
+            app:persistent="false" />
+
+        <Preference
+            app:key="baby_danger_patterns"
+            app:title="@string/baby_pref_danger_patterns_title"
+            app:summary="@string/baby_pref_danger_patterns_summary"
+            app:persistent="false" />
     </PreferenceCategory>
 
     <Preference

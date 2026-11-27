@@ -93,6 +93,18 @@ public class BabyLearningStateTest {
     }
 
     @Test
+    public void pinnedIds_surviveGoalRepickAfterOnboarding() {
+        // During first onboarding the goal leads the pins…
+        BabyPreferences.setOnboardingGoal(context, BabyPreferences.GOAL_TOOLS_PYTHON);
+        assertEquals("try_python", BabyPreferences.getPinnedIds(context).get(0));
+        // …but once onboarding is complete, re-picking a goal must not
+        // silently rearrange the home grid (review L-A5).
+        BabyPreferences.setOnboardingCompleted(context, true);
+        BabyPreferences.setOnboardingGoal(context, BabyPreferences.GOAL_FILES_DEVICE);
+        assertEquals("try_python", BabyPreferences.getPinnedIds(context).get(0));
+    }
+
+    @Test
     public void customCommands_jsonRoundTrip() {
         assertTrue(BabyPreferences.getCustomCommands(context).isEmpty());
         BabyCustomCommand custom = new BabyCustomCommand(

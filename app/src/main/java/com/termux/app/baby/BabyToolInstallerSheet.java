@@ -35,6 +35,9 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
 
     private final BabyCommandExecutor executor;
     private final OnToolActionListener listener;
+    /** The install confirmation currently showing, tied to this sheet's life. */
+    @androidx.annotation.Nullable
+    private AlertDialog confirmDialog;
     private final LinearLayout toolsContainer;
     private final LinearLayout agentsContainer;
 
@@ -183,11 +186,33 @@ public final class BabyToolInstallerSheet extends BottomSheetDialog {
      */
     private void confirmInstall(@NonNull String itemName, @NonNull Runnable onConfirmed) {
         Context ctx = getContext();
-        new AlertDialog.Builder(ctx)
+        // The dialog belongs to this sheet: if the sheet goes away first
+        // (back press, mode switch), the dialog must go with it — a
+        // surviving dialog could start an install after the user already
+        // backed out of the installer.
+        if (confirmDialog != null && confirmDialog.isShowing()) {
+            confirmDialog.dismiss();
+        }
+        confirmDialog = new AlertDialog.Builder(ctx)
             .setTitle(ctx.getString(R.string.baby_install_confirm_title, itemName))
             .setMessage(R.string.baby_install_confirm_message)
             .setNegativeButton(R.string.baby_install_confirm_cancel, null)
-            .setPositiveButton(R.string.baby_installer_install, (dialog, which) -> onConfirmed.run())
-            .show();
+            .setPositiveButton(R.string.baby_installer_install, (dialog, which) -> {
+                if (isShowing()) onConfirmed.run();
+            })
+            .create();
+        confirmDialog.setOnDismissListener(d -> {
+            if (confirmDialog == d) confirmDialog = null;
+        });
+        confirmDialog.show();
+    }
+
+    @Override
+    public void dismiss() {
+        if (confirmDialog != null && confirmDialog.isShowing()) {
+            confirmDialog.dismiss();
+        }
+        confirmDialog = null;
+        super.dismiss();
     }
 }

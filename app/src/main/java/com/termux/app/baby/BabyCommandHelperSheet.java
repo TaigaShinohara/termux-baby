@@ -344,7 +344,10 @@ public final class BabyCommandHelperSheet extends BottomSheetDialog {
                     ids.add(action.id);
                 }
                 BabyPreferences.setPinnedIds(ctx, ids);
-                notifyItemChanged(holder.getAdapterPosition());
+                int adapterPosition = holder.getAdapterPosition();
+                if (adapterPosition != RecyclerView.NO_POSITION) {
+                    notifyItemChanged(adapterPosition);
+                }
                 pinsChanged.run();
             });
         }

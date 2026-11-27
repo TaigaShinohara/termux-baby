@@ -185,9 +185,40 @@ public final class BabyShellDefaults {
         // Migrate a v1 whole file: drop the known template lines, keep every
         // other line (the user's own additions) below the new managed block.
         List<String> userLines = new ArrayList<>();
-        for (String line : lines) {
-            if (!legacyLines.contains(line)) {
-                userLines.add(line);
+        if (legacyMarker != null) {
+            // Only lines inside the actual v1 block count as template lines:
+            // the contiguous run starting at the marker line, made up of
+            // known v1 lines and blanks. An identical-looking line the user
+            // wrote elsewhere in the file is theirs and must survive — a
+            // plain set-membership test would silently delete it.
+            int blockStart = -1;
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).contains(legacyMarker)) {
+                    blockStart = i;
+                    break;
+                }
+            }
+            int blockEnd = blockStart;
+            if (blockStart >= 0) {
+                while (blockEnd < lines.size()
+                    && (lines.get(blockEnd).isEmpty() || legacyLines.contains(lines.get(blockEnd)))) {
+                    blockEnd++;
+                }
+            }
+            for (int i = 0; i < lines.size(); i++) {
+                boolean inLegacyBlock = i >= blockStart && i < blockEnd;
+                if (!inLegacyBlock || !legacyLines.contains(lines.get(i))) {
+                    userLines.add(lines.get(i));
+                }
+            }
+        } else {
+            // No marker line (.profile): the file was only accepted as
+            // legacy when every non-blank line is a known v1 line, so
+            // dropping by membership cannot remove a user line.
+            for (String line : lines) {
+                if (!legacyLines.contains(line)) {
+                    userLines.add(line);
+                }
             }
         }
         trimBlankEdges(userLines);
@@ -246,13 +277,26 @@ public final class BabyShellDefaults {
     }
 
     private static boolean writeAtomically(@NonNull File file, @NonNull List<String> lines) {
-        File parent = file.getParentFile();
+        // Write to the canonical target: if ~/.bashrc is a symlink (e.g.
+        // into a dotfiles repo), renaming over the link path would silently
+        // replace the link with a regular file. Renaming over the resolved
+        // target keeps the link itself intact.
+        File dest;
+        try {
+            dest = file.getCanonicalFile();
+        } catch (IOException e) {
+            dest = file.getAbsoluteFile();
+        }
+        File parent = dest.getParentFile();
         if (parent != null && !parent.exists()) {
             //noinspection ResultOfMethodCallIgnored
             parent.mkdirs();
         }
         String content = String.join("\n", lines) + "\n";
-        File tmp = new File(parent, file.getName() + ".baby-tmp");
+        // Unique temp name: a fixed one collides when two writers (or a
+        // leftover from a crashed run) race on the same file.
+        File tmp = new File(parent, dest.getName() + ".baby-tmp-"
+            + java.util.UUID.randomUUID().toString());
         try (FileOutputStream out = new FileOutputStream(tmp)) {
             out.write(content.getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
@@ -261,7 +305,7 @@ public final class BabyShellDefaults {
             tmp.delete();
             return false;
         }
-        if (!tmp.renameTo(file)) {
+        if (!tmp.renameTo(dest)) {
             //noinspection ResultOfMethodCallIgnored
             tmp.delete();
             return false;

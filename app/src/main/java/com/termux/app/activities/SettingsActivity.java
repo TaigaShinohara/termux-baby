@@ -3,8 +3,11 @@ package com.termux.app.activities;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Environment;
+import android.text.InputType;
+import android.widget.EditText;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
@@ -117,6 +120,58 @@ public class SettingsActivity extends AppCompatActivity {
                     return true;
                 });
             }
+
+            SwitchPreferenceCompat dangerConfirmPref = findPreference("baby_danger_confirm");
+            if (dangerConfirmPref != null) {
+                dangerConfirmPref.setChecked(BabyPreferences.isDangerConfirmEnabled(context));
+                dangerConfirmPref.setOnPreferenceChangeListener((preference, newValue) -> {
+                    if (newValue instanceof Boolean) {
+                        BabyPreferences.setDangerConfirmEnabled(context, (Boolean) newValue);
+                        dangerConfirmPref.setChecked((Boolean) newValue);
+                    }
+                    return false;
+                });
+            }
+
+            Preference dangerPatternsPref = findPreference("baby_danger_patterns");
+            if (dangerPatternsPref != null) {
+                dangerPatternsPref.setOnPreferenceClickListener(preference -> {
+                    showDangerPatternsDialog(context);
+                    return true;
+                });
+            }
+        }
+
+        /** Multiline editor for the dangerous-word list (one entry per line). */
+        private void showDangerPatternsDialog(@NonNull Context context) {
+            EditText input = new EditText(context);
+            input.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+            input.setMinLines(6);
+            input.setText(android.text.TextUtils.join(
+                "\n", BabyPreferences.getDangerPatterns(context)));
+            int padding = (int) (20 * context.getResources().getDisplayMetrics().density);
+            input.setPadding(padding, padding / 2, padding, padding / 2);
+
+            new AlertDialog.Builder(context)
+                .setTitle(R.string.baby_pref_danger_patterns_title)
+                .setView(input)
+                .setNegativeButton(R.string.baby_install_confirm_cancel, null)
+                .setNeutralButton(R.string.baby_pref_danger_patterns_reset, (dialog, which) ->
+                    BabyPreferences.resetDangerPatterns(context))
+                .setPositiveButton(R.string.baby_pref_danger_patterns_save, (dialog, which) -> {
+                    java.util.List<String> patterns = new java.util.ArrayList<>();
+                    String text = input.getText() != null ? input.getText().toString() : "";
+                    for (String line : text.split("\n")) {
+                        String pattern = line.trim();
+                        if (!pattern.isEmpty() && !patterns.contains(pattern)) {
+                            patterns.add(pattern);
+                        }
+                    }
+                    BabyPreferences.setDangerPatterns(context, patterns);
+                })
+                .show();
         }
 
         private void configureTermuxAPIPreference(@NonNull Context context) {

@@ -65,17 +65,25 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
     private final OnboardingInteractionListener mListener;
     private final SparseArray<View> mInstantiatedViews = new SparseArray<>();
 
+    /**
+     * Try-run state, owned by the activity: it survives adapter/page
+     * recreation, so a rotation cannot reset the try page or let the run
+     * be counted twice.
+     */
+    @NonNull
+    private final BabyOnboardingTryState mTryState;
+
     @NonNull
     private String mSelectedGoal = BabyPreferences.GOAL_EXPLORE;
     private boolean mHasUserSelectedGoal = false;
-    private boolean mTryRunning = false;
-    private boolean mTryDone = false;
 
     public BabyOnboardingPagerAdapter(@NonNull Context context,
-                                      @NonNull OnboardingInteractionListener listener) {
+                                      @NonNull OnboardingInteractionListener listener,
+                                      @NonNull BabyOnboardingTryState tryState) {
         mContext = context;
         mInflater = LayoutInflater.from(context);
         mListener = listener;
+        mTryState = tryState;
     }
 
     public void setSelectedGoal(@NonNull String goal, boolean userSelected) {
@@ -116,7 +124,7 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
     }
 
     public boolean isTryDone() {
-        return mTryDone;
+        return mTryState.done;
     }
 
     @Override
@@ -320,8 +328,10 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
     private void bindTryPage(@NonNull View view) {
         MaterialButton runButton = view.findViewById(R.id.onboarding_try_run_button);
         runButton.setOnClickListener(v -> {
-            if (mTryRunning || mTryDone) return;
-            mTryRunning = true;
+            if (mTryState.running || mTryState.done) return;
+            mTryState.running = true;
+            mTryState.failed = false;
+            mTryState.notReady = false;
             runButton.setEnabled(false);
             runButton.setText(R.string.baby_onboarding_try_running);
             mListener.onTryRunRequested();
@@ -348,20 +358,84 @@ public class BabyOnboardingPagerAdapter extends PagerAdapter {
             noteView.setVisibility(BabyPreferences.GOAL_TOOLS_PYTHON.equals(mSelectedGoal)
                 ? View.VISIBLE : View.GONE);
         }
+        renderTryState(view);
     }
 
-    /** Shows the try run's outcome: friendly summary first, raw output under it. */
-    public void showTryResult(@NonNull String summary, @Nullable String rawOutput) {
-        mTryRunning = false;
-        mTryDone = true;
+    /**
+     * Shows the try run's outcome: friendly summary first, raw output under
+     * it. Success completes the page; failure does NOT — the run button
+     * stays as a retry and the success text is never shown for a failure.
+     */
+    public void showTryResult(@NonNull String summary, @Nullable String rawOutput, boolean success) {
+        mTryState.running = false;
+        mTryState.done = success;
+        mTryState.failed = !success;
+        mTryState.notReady = false;
+        mTryState.summary = summary;
+        mTryState.rawOutput = rawOutput;
         View view = mInstantiatedViews.get(PAGE_TRY);
         if (view == null) return;
+        renderTryState(view);
+    }
+
+    /**
+     * The environment (bootstrap) is not extracted yet, so the try run was
+     * not even attempted: say it is still preparing and keep the button
+     * available for when it is ready.
+     */
+    public void showTryNotReady() {
+        mTryState.running = false;
+        mTryState.failed = false;
+        mTryState.notReady = true;
+        View view = mInstantiatedViews.get(PAGE_TRY);
+        if (view == null) return;
+        renderTryState(view);
+    }
+
+    /** Renders the try page's button/result area from {@link #mTryState}. */
+    private void renderTryState(@NonNull View view) {
         MaterialButton runButton = view.findViewById(R.id.onboarding_try_run_button);
-        runButton.setVisibility(View.GONE);
         TextView resultView = view.findViewById(R.id.onboarding_try_result);
-        resultView.setText(summary + "\n\n" + mContext.getString(R.string.baby_onboarding_try_done));
-        resultView.setVisibility(View.VISIBLE);
         TextView rawView = view.findViewById(R.id.onboarding_try_raw);
+
+        if (mTryState.running) {
+            runButton.setVisibility(View.VISIBLE);
+            runButton.setEnabled(false);
+            runButton.setText(R.string.baby_onboarding_try_running);
+            resultView.setVisibility(View.GONE);
+            rawView.setVisibility(View.GONE);
+            return;
+        }
+        if (mTryState.done) {
+            runButton.setVisibility(View.GONE);
+            resultView.setText(mTryState.summary + "\n\n"
+                + mContext.getString(R.string.baby_onboarding_try_done));
+            resultView.setVisibility(View.VISIBLE);
+        } else if (mTryState.failed) {
+            // Retry stays one tap away; only the failure message is shown.
+            runButton.setVisibility(View.VISIBLE);
+            runButton.setEnabled(true);
+            runButton.setText(R.string.baby_onboarding_try_run);
+            resultView.setText(mTryState.summary);
+            resultView.setVisibility(View.VISIBLE);
+        } else if (mTryState.notReady) {
+            runButton.setVisibility(View.VISIBLE);
+            runButton.setEnabled(true);
+            runButton.setText(R.string.baby_onboarding_try_run);
+            resultView.setText(R.string.baby_home_status_preparing);
+            resultView.setVisibility(View.VISIBLE);
+            rawView.setVisibility(View.GONE);
+            return;
+        } else {
+            runButton.setVisibility(View.VISIBLE);
+            runButton.setEnabled(true);
+            runButton.setText(R.string.baby_onboarding_try_run);
+            resultView.setVisibility(View.GONE);
+            rawView.setVisibility(View.GONE);
+            return;
+        }
+
+        String rawOutput = mTryState.rawOutput;
         if (rawOutput != null && !rawOutput.trim().isEmpty()) {
             String raw = rawOutput.trim();
             if (raw.length() > 300) raw = raw.substring(0, 300) + "…";

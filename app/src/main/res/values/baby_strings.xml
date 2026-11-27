@@ -206,6 +206,15 @@
     <string name="baby_pref_category_title">Termux Baby</string>
     <string name="baby_pref_replay_onboarding_title">Show Welcome Guide</string>
     <string name="baby_pref_replay_onboarding_summary">View the quick 3-step introduction again</string>
+    <string name="baby_danger_title">Dangerous command</string>
+    <string name="baby_danger_message">\"%1$s\" contains a dangerous word (%2$s). A mistake could delete files or be impossible to undo. Run it anyway?</string>
+    <string name="baby_danger_run">Run anyway</string>
+    <string name="baby_pref_danger_confirm_title">Ask before running dangerous commands</string>
+    <string name="baby_pref_danger_confirm_summary">When on, commands containing a dangerous word always ask before running</string>
+    <string name="baby_pref_danger_patterns_title">Dangerous word list</string>
+    <string name="baby_pref_danger_patterns_summary">One word or phrase per line. Commands containing these are treated as dangerous</string>
+    <string name="baby_pref_danger_patterns_save">Save</string>
+    <string name="baby_pref_danger_patterns_reset">Reset to defaults</string>
     <string name="baby_pref_default_mode_title">Start in Easy Mode</string>
     <string name="baby_pref_default_mode_summary_baby">Open with one-tap cards (recommended for beginners)</string>
     <string name="baby_pref_default_mode_summary_pro">Open directly in the classic terminal</string>

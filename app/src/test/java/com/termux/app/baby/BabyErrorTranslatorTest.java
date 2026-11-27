@@ -37,6 +37,31 @@ public class BabyErrorTranslatorTest {
     }
 
     @Test
+    public void classify_notFoundMidSentence_isNotCommandNotFound() {
+        // Ordinary program output that merely contains ": not found"
+        // mid-sentence must not be misread as a missing command.
+        assertEquals(
+            BabyErrorTranslator.ErrorCategory.UNKNOWN,
+            BabyErrorTranslator.classify(1, "", "config: not found, using defaults", false, false).category
+        );
+        assertEquals(
+            BabyErrorTranslator.ErrorCategory.UNKNOWN,
+            BabyErrorTranslator.classify(1, "value: not found in cache", "", false, false).category
+        );
+    }
+
+    @Test
+    public void classify_bareNotFoundAtLineEnd_stillCommandNotFound() {
+        // The shells' real format without an exit code of 127 still
+        // classifies, and the command name is extracted.
+        BabyErrorTranslator.TranslatedError err = BabyErrorTranslator.classify(
+            1, "", "mytool: not found", false, false
+        );
+        assertEquals(BabyErrorTranslator.ErrorCategory.COMMAND_NOT_FOUND, err.category);
+        assertEquals("mytool", err.missingCommand);
+    }
+
+    @Test
     public void mapBinaryToPackage_coversKnownAndUnknownBinaries() {
         assertEquals("python", BabyErrorTranslator.mapBinaryToPackage("python"));
         assertEquals("python", BabyErrorTranslator.mapBinaryToPackage("PYTHON3"));

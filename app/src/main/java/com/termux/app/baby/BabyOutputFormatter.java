@@ -19,7 +19,16 @@ import java.util.regex.Pattern;
  */
 public final class BabyOutputFormatter {
 
-    private static final Pattern ANSI_ESCAPE_PATTERN = Pattern.compile("\u001B\\[[;\\d]*[ -/]*[@-~]");
+    // OSC sequences (window titles, hyperlinks): ESC ] … ended by BEL or
+    // ESC \ (an unterminated one runs to the end of the string).
+    private static final Pattern ANSI_OSC_PATTERN = Pattern.compile(
+        "\u001B\\][^\u0007\u001B]*(?:\u0007|\u001B\\\\|$)"
+    );
+    // CSI sequences plus the common single-character escapes (charset
+    // designation ESC ( X, save/restore cursor ESC 7 / ESC 8, etc.).
+    private static final Pattern ANSI_ESCAPE_PATTERN = Pattern.compile(
+        "\u001B(?:\\[[;?\\d]*[ -/]*[@-~]|[()][0-9A-Za-z]|[@-Z\\\\-_]|[78])"
+    );
     private static final Pattern PING_RTT_PATTERN = Pattern.compile(
         "(?:rtt|round-trip)\\s+min/avg/max(?:/[a-z-]+)?\\s*=\\s*[0-9.]+/([0-9.]+)/[0-9.]+"
     );
@@ -36,7 +45,9 @@ public final class BabyOutputFormatter {
         INSTALL_OK,
         UPDATE_OK,
         GENERIC_OK,
-        GENERIC_EMPTY
+        GENERIC_EMPTY,
+        /** The command exited non-zero; never shown as a success summary. */
+        FAILED
     }
 
     /**
@@ -117,7 +128,10 @@ public final class BabyOutputFormatter {
         if (input == null || input.isEmpty()) {
             return "";
         }
-        return ANSI_ESCAPE_PATTERN.matcher(input).replaceAll("");
+        // OSC first: its terminator can itself contain an ESC, which the
+        // single-character pattern would otherwise eat half of.
+        String withoutOsc = ANSI_OSC_PATTERN.matcher(input).replaceAll("");
+        return ANSI_ESCAPE_PATTERN.matcher(withoutOsc).replaceAll("");
     }
 
     /**
@@ -132,6 +146,18 @@ public final class BabyOutputFormatter {
     ) {
         String stdout = stripAnsi(rawStdout).trim();
         String stderr = stripAnsi(rawStderr).trim();
+
+        if (exitCode != 0 && format != BabyAction.OutputFormat.NETWORK) {
+            // Every format must honour the exit code, not just NETWORK:
+            // a failed run (e.g. ls on a missing folder, a pkg error)
+            // must never be summarised as "found items" / "installed".
+            // NETWORK keeps its own mapping (failure = offline summary).
+            String preview = extractFirstLines(!stderr.isEmpty() ? stderr : stdout, 2);
+            return new ParsedSummary(
+                SummaryKind.FAILED, 0, 0, 0, Collections.emptyList(),
+                null, null, null, preview
+            );
+        }
 
         switch (format) {
             case FILES:
@@ -407,6 +433,13 @@ public final class BabyOutputFormatter {
                 return context.getString(R.string.baby_summary_generic_done);
             case GENERIC_EMPTY:
                 return context.getString(R.string.baby_runner_empty_output);
+            case FAILED: {
+                String headline = context.getString(R.string.baby_error_generic);
+                if (summary.previewText != null && !summary.previewText.isEmpty()) {
+                    return headline + "\n\n" + summary.previewText;
+                }
+                return headline;
+            }
             case GENERIC_OK:
             default: {
                 if (summary.previewText != null && !summary.previewText.isEmpty()) {

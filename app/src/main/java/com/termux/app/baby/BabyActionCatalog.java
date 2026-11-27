@@ -31,8 +31,13 @@ public final class BabyActionCatalog {
 
     private static final String SAFE_PYTHON_CALC_TEMPLATE =
         "python3 -c 'import ast, operator as op, sys\n"
+            + "def pw(a,b):\n"
+            + " if abs(b)>100: raise ValueError(\"too big\")\n"
+            + " r=a**b\n"
+            + " if isinstance(r,int) and r.bit_length()>4096: raise ValueError(\"too big\")\n"
+            + " return r\n"
             + "ops={ast.Add:op.add,ast.Sub:op.sub,ast.Mult:op.mul,ast.Div:op.truediv,"
-            + "ast.FloorDiv:op.floordiv,ast.Mod:op.mod,ast.Pow:op.pow,ast.USub:op.neg,ast.UAdd:op.pos}\n"
+            + "ast.FloorDiv:op.floordiv,ast.Mod:op.mod,ast.Pow:pw,ast.USub:op.neg,ast.UAdd:op.pos}\n"
             + "def ev(n):\n"
             + " if isinstance(n,ast.Expression): return ev(n.body)\n"
             + " if isinstance(n,ast.Constant) and isinstance(n.value,(int,float)): return n.value\n"
@@ -491,7 +496,10 @@ public final class BabyActionCatalog {
             + " && curl -fsSL https://antigravity.google/cli/install.sh | bash\""
             + " && printf '%s\\n' '#!/data/data/com.termux/files/usr/bin/sh'"
             + " 'exec proot-distro login debian -- /root/.local/bin/agy \"$@\"'"
-            + " > \"$PREFIX/bin/agy\""
+            // Written via tee, not a redirect: install commands are
+            // pre-vetted catalog content and must pass the same danger
+            // assessment user commands get (a ">" overwrite would not).
+            + " | tee \"$PREFIX/bin/agy\" > /dev/null"
             + " && chmod +x \"$PREFIX/bin/agy\""
             + " && echo 'Antigravity (agy) is ready. Tap Open to start.'";
 
@@ -510,7 +518,15 @@ public final class BabyActionCatalog {
                 "opencode",
                 // Community-maintained native bionic build for Termux, distributed
                 // through its own apt repository so `pkg upgrade` keeps it current.
-                "curl -fsSL https://hope2333.github.io/repo/install.sh | sh -s -- --install opencode",
+                // The bootstrap script is downloaded and verified against a
+                // pinned SHA-256 before it runs — never piped straight into
+                // sh. If upstream republishes the script, the install stops
+                // here until the pin is reviewed and updated.
+                "curl -fsSL https://hope2333.github.io/repo/install.sh"
+                    + " -o \"$PREFIX/tmp/opencode-install.sh\""
+                    + " && echo '459cca9e4452ba93d1b71257931b0629a56c7293e899e512f7c95c08c6d8f8b7"
+                    + "  '\"$PREFIX/tmp/opencode-install.sh\" | sha256sum -c -"
+                    + " && sh \"$PREFIX/tmp/opencode-install.sh\" --install opencode",
                 "opencode"
             ),
             new AgentSpec(
@@ -718,49 +734,112 @@ public final class BabyActionCatalog {
     }
 
     /**
-     * Guardrail check rejecting obviously destructive commands from
-     * auto-running in Baby Mode. Token-based, so split spellings
-     * ({@code rm -r -f}, {@code rm --recursive --force}) are caught just
-     * like the combined {@code rm -rf}.
+     * Built-in dangerous-command patterns, used until the user saves their
+     * own list in Settings. One pattern per entry: a single word matches a
+     * whole command word (after normalization, so {@code $(rm},
+     * {@code `rm`}, {@code $PREFIX/bin/rm} all count as {@code rm}); a
+     * phrase containing a space matches as a substring.
+     */
+    @NonNull
+    public static java.util.List<String> defaultDangerPatterns() {
+        return java.util.Arrays.asList(
+            "rm", "mkfs", "dd", "shutdown", "reboot", "poweroff",
+            "pkg uninstall", "-delete"
+        );
+    }
+
+    /**
+     * Splits a command into normalized words: lowercased, split on
+     * whitespace and shell separators, with command-substitution openers,
+     * quotes and directory prefixes stripped ({@code $PREFIX/bin/rm} →
+     * {@code rm}). This is what danger matching compares against, so
+     * spelling tricks cannot slip a dangerous word past the check.
+     */
+    @NonNull
+    static java.util.List<String> normalizedTokens(@Nullable String command) {
+        java.util.List<String> result = new java.util.ArrayList<>();
+        if (command == null) return result;
+        String lower = command.toLowerCase(Locale.US);
+        for (String raw : lower.split("[\\s;|&]+")) {
+            String token = raw;
+            while (token.startsWith("$(") || token.startsWith("`")
+                || token.startsWith("\"") || token.startsWith("'")
+                || token.startsWith("(")) {
+                token = token.substring(token.startsWith("$(") ? 2 : 1);
+            }
+            while (token.endsWith(")") || token.endsWith("`")
+                || token.endsWith("\"") || token.endsWith("'")) {
+                token = token.substring(0, token.length() - 1);
+            }
+            int slash = token.lastIndexOf('/');
+            if (slash >= 0) token = token.substring(slash + 1);
+            if (!token.isEmpty()) result.add(token);
+        }
+        return result;
+    }
+
+    /**
+     * Assesses whether a command looks dangerous, returning the matched
+     * pattern (or a structural label like {@code "> file"}) or null when
+     * nothing matches. Structural dangers — fork bombs and redirects that
+     * overwrite files or devices — are always checked and are not part of
+     * the editable pattern list. {@code patterns} is the user's list from
+     * Settings (defaults: {@link #defaultDangerPatterns()}).
+     */
+    @Nullable
+    public static String assessDanger(
+        @Nullable String command,
+        @NonNull java.util.List<String> patterns
+    ) {
+        if (command == null || command.trim().isEmpty()) return null;
+        String lower = command.toLowerCase(Locale.US);
+        if (lower.contains(":(){")) return ":(){";
+        // Redirects: "> target" / ">> target" / ">target" overwriting
+        // anything but /dev/null can destroy files or devices.
+        String[] rawTokens = lower.split("\\s+");
+        for (int i = 0; i < rawTokens.length; i++) {
+            String token = rawTokens[i];
+            String target = null;
+            if (token.equals(">") || token.equals(">>")) {
+                if (i + 1 < rawTokens.length) target = rawTokens[i + 1];
+            } else if (token.startsWith(">>") && token.length() > 2) {
+                target = token.substring(2);
+            } else if (token.startsWith(">") && token.length() > 1) {
+                target = token.substring(1);
+            }
+            if (target != null && !target.equals("/dev/null")
+                && !target.startsWith("&")) {
+                return token.startsWith(">") ? "> " + target : ">";
+            }
+        }
+        java.util.List<String> tokens = normalizedTokens(command);
+        for (String pattern : patterns) {
+            String p = pattern.trim().toLowerCase(Locale.US);
+            if (p.isEmpty()) continue;
+            if (p.contains(" ")) {
+                if (lower.contains(p)) return pattern;
+            } else {
+                for (String token : tokens) {
+                    if (token.equals(p) || token.startsWith(p + ".")) {
+                        return pattern;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Guardrail check: true when the command matches none of the built-in
+     * danger rules. Kept for callers that need a plain yes/no; the run
+     * paths themselves use {@link #assessDanger} with the user's patterns
+     * so a dangerous command asks for confirmation instead of silently
+     * refusing to run.
      */
     public static boolean isSafeForAutoRun(@Nullable String command) {
         if (command == null || command.trim().isEmpty()) {
             return false;
         }
-        String lower = command.toLowerCase(Locale.US);
-        if (lower.contains(":(){") || lower.contains("> /dev/")) {
-            return false;
-        }
-        String[] tokens = lower.split("[\\s;|&]+");
-        for (int i = 0; i < tokens.length; i++) {
-            String token = tokens[i];
-            if (token.equals("rm")) {
-                // Any recursive/force flag, in any spelling, blocks the run.
-                for (int j = i + 1; j < tokens.length; j++) {
-                    String arg = tokens[j];
-                    if (arg.equals("--recursive") || arg.equals("--force")) {
-                        return false;
-                    }
-                    if (arg.startsWith("-") && !arg.startsWith("--")
-                        && (arg.indexOf('r') >= 0 || arg.indexOf('f') >= 0)) {
-                        return false;
-                    }
-                }
-            }
-            if (token.equals("mkfs") || token.startsWith("mkfs.")) {
-                return false;
-            }
-            if (token.equals("dd")) {
-                return false;
-            }
-            if (token.equals("shutdown") || token.equals("reboot")
-                || token.equals("poweroff")) {
-                return false;
-            }
-            if (token.startsWith(">") && token.contains("/dev/")) {
-                return false;
-            }
-        }
-        return true;
+        return assessDanger(command, defaultDangerPatterns()) == null;
     }
 }

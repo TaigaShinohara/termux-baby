@@ -145,10 +145,27 @@ public final class BabyCommandExecutor {
         try {
             int pid = pidOf(process);
             if (pid > 0) {
-                for (int descendant : collectDescendantPids(pid)) {
+                // Several scan rounds: a child can fork a new process while
+                // the first sweep is running, and a single /proc snapshot
+                // would miss (and leave behind) that late descendant.
+                java.util.Set<Integer> killed = new java.util.HashSet<>();
+                for (int round = 0; round < 3; round++) {
+                    boolean foundNew = false;
+                    for (int descendant : collectDescendantPids(pid)) {
+                        if (killed.add(descendant)) {
+                            foundNew = true;
+                            try {
+                                android.os.Process.sendSignal(descendant, 9 /* SIGKILL */);
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    }
+                    if (!foundNew) break;
                     try {
-                        android.os.Process.sendSignal(descendant, 9 /* SIGKILL */);
-                    } catch (Exception ignored) {
+                        Thread.sleep(30);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
                 }
             }
@@ -157,6 +174,23 @@ public final class BabyCommandExecutor {
         try {
             process.destroy();
         } catch (Exception ignored) {
+        }
+        // Briefly wait for the root to actually die: destroy() alone is
+        // only a signal, and an unreaped root lingers as a zombie still
+        // holding the output pipes.
+        long deadlineMs = System.currentTimeMillis() + 300;
+        while (System.currentTimeMillis() < deadlineMs) {
+            try {
+                process.exitValue();
+                break;
+            } catch (IllegalThreadStateException stillRunning) {
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
         }
     }
 
@@ -300,7 +334,17 @@ public final class BabyCommandExecutor {
     ) {
         long queueStartMs = System.currentTimeMillis();
         try {
-            executionLock.lockInterruptibly();
+            // Poll for the lock instead of one interruptible wait: a cancel
+            // pressed while queued behind a long run (e.g. an install) must
+            // take effect promptly, not when the run ahead finishes.
+            while (!executionLock.tryLock(100, TimeUnit.MILLISECONDS)) {
+                if (handle.isCancelled()) {
+                    return new ExecutionResult(
+                        command, 130, "", "", false, true, false,
+                        System.currentTimeMillis() - queueStartMs
+                    );
+                }
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new ExecutionResult(
@@ -323,6 +367,15 @@ public final class BabyCommandExecutor {
         @Nullable Callback liveCallback
     ) {
         long startMs = System.currentTimeMillis();
+
+        if (handle.isCancelled()) {
+            // Cancelled while queued (or before we even got here): never
+            // start the process at all.
+            return new ExecutionResult(
+                command, 130, "", "", false, true, false,
+                System.currentTimeMillis() - startMs
+            );
+        }
 
         File binDir = new File(prefixDir, "bin");
         File termuxSh = new File(binDir, "sh");
@@ -387,18 +440,19 @@ public final class BabyCommandExecutor {
             Thread stderrReader = new Thread(() -> readStream(
                 runningProcess.getErrorStream(), stderrBuilder, dispatcher
             ), "baby-cmd-stderr");
+            // Daemon: a reader stuck on a pipe a grandchild keeps open must
+            // never be able to hold the app (or the test JVM) alive.
+            stdoutReader.setDaemon(true);
+            stderrReader.setDaemon(true);
             stdoutReader.start();
             stderrReader.start();
 
             boolean finished = waitForProcess(process, timeoutSeconds, handle);
             if (!finished) {
-                // Cancelled or timed out: kill the whole tree and close the
-                // pipes so the reader threads can actually exit.
+                // Cancelled or timed out: kill the whole tree, then reap
+                // the readers with bounded joins.
                 destroyProcessTree(process);
-                closeQuietly(process.getInputStream());
-                closeQuietly(process.getErrorStream());
-                stdoutReader.join(2000);
-                stderrReader.join(2000);
+                joinReaders(process, stdoutReader, stderrReader);
                 if (dispatcher != null) dispatcher.flushNow();
                 return new ExecutionResult(
                     command,
@@ -412,16 +466,7 @@ public final class BabyCommandExecutor {
                 );
             }
 
-            stdoutReader.join(2000);
-            stderrReader.join(2000);
-            if (stdoutReader.isAlive() || stderrReader.isAlive()) {
-                // A grandchild inherited the pipes and is holding them open;
-                // cut the streams so the readers stop instead of leaking.
-                closeQuietly(process.getInputStream());
-                closeQuietly(process.getErrorStream());
-                stdoutReader.join(500);
-                stderrReader.join(500);
-            }
+            joinReaders(process, stdoutReader, stderrReader);
             if (dispatcher != null) dispatcher.flushNow();
             int exitCode = process.exitValue();
             return new ExecutionResult(
@@ -460,6 +505,33 @@ public final class BabyCommandExecutor {
                 false,
                 System.currentTimeMillis() - startMs
             );
+        }
+    }
+
+    /**
+     * Waits for the output readers with bounded joins. Normally they exit
+     * at EOF once the process dies; a grandchild that inherited the pipes
+     * keeps them open forever, so after a short grace period the streams
+     * are closed from this side to wake the readers up. Any reader still
+     * stuck after that is a daemon thread and is left behind deliberately
+     * rather than blocking the result.
+     */
+    private static void joinReaders(
+        @NonNull Process process,
+        @NonNull Thread stdoutReader,
+        @NonNull Thread stderrReader
+    ) {
+        try {
+            stdoutReader.join(1000);
+            stderrReader.join(1000);
+            if (stdoutReader.isAlive() || stderrReader.isAlive()) {
+                closeQuietly(process.getInputStream());
+                closeQuietly(process.getErrorStream());
+                stdoutReader.join(250);
+                stderrReader.join(250);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

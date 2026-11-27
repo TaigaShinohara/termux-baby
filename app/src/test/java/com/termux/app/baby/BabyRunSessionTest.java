@@ -99,6 +99,47 @@ public class BabyRunSessionTest {
     }
 
     @Test
+    public void start_secondCallIsIgnored() throws Exception {
+        BabyCommandExecutor executor = newExecutor();
+        BabyRunSessionRegistry registry = new BabyRunSessionRegistry();
+        BabyRunSession session = startEcho(registry, executor, "echo baby-once");
+        // Re-entry guard: a second start() must not run the command again.
+        session.start(executor);
+        waitForState(session, BabyRunSession.State.SUCCESS);
+        String output = session.getOutputText();
+        assertEquals(output, 1, output.split("baby-once", -1).length - 1);
+        executor.shutdown();
+    }
+
+    @Test
+    public void prune_neverDropsUnseenFinishedBeyondCap() throws Exception {
+        BabyCommandExecutor executor = newExecutor();
+        BabyRunSessionRegistry registry = new BabyRunSessionRegistry();
+
+        // More finished sessions than the retention cap, none of them seen.
+        java.util.List<BabyRunSession> finished = new java.util.ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            finished.add(startEcho(registry, executor, "true"));
+        }
+        for (BabyRunSession session : finished) {
+            waitForState(session, BabyRunSession.State.SUCCESS);
+        }
+
+        // Creating another session triggers the registry's prune pass.
+        registry.create(
+            "C", R.drawable.ic_baby_sparkle, "true",
+            BabyAction.OutputFormat.GENERIC, 5, null, null
+        );
+        registry.pruneSeenFinished();
+
+        // The registry contract: unseen finished sessions are retained.
+        for (BabyRunSession session : finished) {
+            assertTrue(registry.getSessions().contains(session));
+        }
+        executor.shutdown();
+    }
+
+    @Test
     public void prune_removesOnlySeenFinishedSessions() throws Exception {
         BabyCommandExecutor executor = newExecutor();
         BabyRunSessionRegistry registry = new BabyRunSessionRegistry();

@@ -82,6 +82,37 @@ public class BabyShellDefaultsTest {
     }
 
     @Test
+    public void migrationKeepsIdenticalUserLineOutsideTheV1Block() throws Exception {
+        File home = tempFolder.newFolder("home");
+        File bashrc = new File(home, ".bashrc");
+        // The v1 template, then a user line, then a line that is identical
+        // to a v1 template line but is the user's own (it sits outside the
+        // contiguous v1 block). Only the block may be dropped.
+        write(bashrc,
+            "# " + BabyShellDefaults.SETUP_MARKER + " — created once, edit freely.\n" +
+            "# Colored prompt: teal user, green path, yellow $ marker.\n" +
+            "PS1='\\[\\e[1;36m\\]\\u\\[\\e[0m\\] \\[\\e[1;32m\\]\\w\\[\\e[0m\\] \\[\\e[1;33m\\]$\\[\\e[0m\\] '\n" +
+            "# Colors for everyday commands.\n" +
+            "alias ls='ls --color=auto'\n" +
+            "alias grep='grep --color=auto'\n" +
+            "alias egrep='egrep --color=auto'\n" +
+            "alias diff='diff --color=auto'\n" +
+            "export LS_COLORS='di=1;36:ln=1;35:ex=1;32:*.tar=31:*.gz=31:*.zip=31:*.jpg=35:*.png=35:*.mp3=33:*.mp4=33'\n" +
+            "alias zz='top'\n" +
+            "alias ls='ls --color=auto'\n");
+
+        assertTrue(BabyShellDefaults.ensureDefaultShellFiles(home));
+
+        String migrated = read(bashrc);
+        int blockEnd = migrated.indexOf("# <<< Termux Baby <<<");
+        assertTrue(blockEnd >= 0);
+        String belowBlock = migrated.substring(blockEnd);
+        // The user's own identical line survives below the managed block.
+        assertTrue(belowBlock.contains("alias zz='top'"));
+        assertTrue(belowBlock.contains("alias ls='ls --color=auto'"));
+    }
+
+    @Test
     public void neverTouchesUserOwnedFiles() throws Exception {
         File home = tempFolder.newFolder("home");
         File bashrc = new File(home, ".bashrc");

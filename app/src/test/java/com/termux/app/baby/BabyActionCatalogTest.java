@@ -9,6 +9,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -107,10 +108,57 @@ public class BabyActionCatalogTest {
         assertFalse(BabyActionCatalog.isSafeForAutoRun("rm -f one.log"));
         assertFalse(BabyActionCatalog.isSafeForAutoRun("shutdown now"));
         assertFalse(BabyActionCatalog.isSafeForAutoRun("reboot"));
-        // A plain single-file remove and ordinary commands still pass.
-        assertTrue(BabyActionCatalog.isSafeForAutoRun("rm one.log"));
-        assertTrue(BabyActionCatalog.isSafeForAutoRun("ls -la && rm one.log"));
         assertTrue(BabyActionCatalog.isSafeForAutoRun("git --version"));
+    }
+
+    @Test
+    public void assessDanger_anyRemoveIsDangerous() {
+        // Even a plain single-file remove is destructive: it asks first.
+        java.util.List<String> defaults = BabyActionCatalog.defaultDangerPatterns();
+        assertEquals("rm", BabyActionCatalog.assessDanger("rm one.log", defaults));
+        assertEquals("rm", BabyActionCatalog.assessDanger("ls -la && rm one.log", defaults));
+        assertEquals("pkg uninstall",
+            BabyActionCatalog.assessDanger("pkg uninstall python", defaults));
+        assertEquals("-delete",
+            BabyActionCatalog.assessDanger("find . -delete", defaults));
+        assertNull(BabyActionCatalog.assessDanger("ls -la", defaults));
+        assertNull(BabyActionCatalog.assessDanger("pkg install -y python", defaults));
+    }
+
+    @Test
+    public void assessDanger_catchesHiddenSpellings() {
+        // Command substitution, backticks and path prefixes must not hide
+        // a dangerous word from the check.
+        java.util.List<String> defaults = BabyActionCatalog.defaultDangerPatterns();
+        assertEquals("rm", BabyActionCatalog.assessDanger("echo $(rm -rf ~/notes)", defaults));
+        assertEquals("rm", BabyActionCatalog.assessDanger("echo `rm -rf ~/notes`", defaults));
+        assertEquals("rm", BabyActionCatalog.assessDanger("$PREFIX/bin/rm -rf ~/notes", defaults));
+        assertEquals("rm", BabyActionCatalog.assessDanger("/bin/rm one.log", defaults));
+    }
+
+    @Test
+    public void assessDanger_redirectsOverwrite() {
+        java.util.List<String> defaults = BabyActionCatalog.defaultDangerPatterns();
+        assertNotNull(BabyActionCatalog.assessDanger("echo hi > out.txt", defaults));
+        assertNotNull(BabyActionCatalog.assessDanger("echo hi >out.txt", defaults));
+        assertNotNull(BabyActionCatalog.assessDanger("cat a >> ~/.bashrc", defaults));
+        assertNotNull(BabyActionCatalog.assessDanger("dd if=x of=/dev/sda", defaults));
+        // /dev/null is the one harmless sink.
+        assertNull(BabyActionCatalog.assessDanger("make 2> /dev/null", defaults));
+        assertNull(BabyActionCatalog.assessDanger("cmd > /dev/null 2>&1", defaults));
+    }
+
+    @Test
+    public void assessDanger_userPatternsAreHonored() {
+        java.util.List<String> custom = java.util.Arrays.asList("deploy", "git push");
+        assertEquals("deploy", BabyActionCatalog.assessDanger("bash deploy.sh", custom));
+        assertEquals("git push", BabyActionCatalog.assessDanger("git push origin main", custom));
+        assertNull(BabyActionCatalog.assessDanger("git status", custom));
+        // An empty user list leaves only the structural checks.
+        assertNull(BabyActionCatalog.assessDanger(
+            "rm one.log", java.util.Collections.emptyList()));
+        assertNotNull(BabyActionCatalog.assessDanger(
+            "echo hi > out.txt", java.util.Collections.emptyList()));
     }
 
     @Test

@@ -29,6 +29,9 @@ public final class BabyPreferences {
     private static final String KEY_HUSHLOGIN_INITIALIZED = "hushlogin_initialized";
     private static final String KEY_PINNED_IDS = "pinned_ids";
     private static final String KEY_CUSTOM_COMMANDS = "custom_commands";
+    private static final String KEY_CUSTOM_COMMANDS_BACKUP = "custom_commands_corrupt_backup";
+    private static final String KEY_DANGER_CONFIRM_ENABLED = "danger_confirm_enabled";
+    private static final String KEY_DANGER_PATTERNS = "danger_patterns";
     private static final String KEY_RUN_COUNT_PREFIX = "run_count_";
     private static final String KEY_LAST_RESULT_PREFIX = "last_result_";
     private static final String KEY_LAST_RESULT_OK_PREFIX = "last_result_ok_";
@@ -95,6 +98,16 @@ public final class BabyPreferences {
 
     /** Saves the user's selected onboarding goal (use GOAL_* constants). */
     public static void setOnboardingGoal(@NonNull Context context, @NonNull String goal) {
+        // While the first onboarding is still running, the chosen goal
+        // leads the default pin set (KEY_PINNED_IDS stays unset and the
+        // pins are derived from the goal). Once onboarding is complete the
+        // home grid is the user's own, so snapshot the pins they currently
+        // see before a goal re-pick: re-picking a goal must never silently
+        // rearrange the home of someone who never edited pins.
+        if (isOnboardingCompleted(context)
+            && getPrefs(context).getString(KEY_PINNED_IDS, null) == null) {
+            setPinnedIds(context, getPinnedIds(context));
+        }
         getPrefs(context).edit().putString(KEY_ONBOARDING_GOAL, goal).commit();
     }
 
@@ -210,6 +223,10 @@ public final class BabyPreferences {
             .putBoolean(KEY_LAST_RESULT_OK_PREFIX + itemId, ok);
         if (summary != null) {
             editor.putString(KEY_LAST_RESULT_PREFIX + itemId, summary);
+        } else {
+            // A null summary must clear the old text: leaving it would pair a
+            // stale success sentence with the fresh ok/fail mark.
+            editor.remove(KEY_LAST_RESULT_PREFIX + itemId);
         }
         editor.commit();
     }
@@ -256,7 +273,13 @@ public final class BabyPreferences {
                 }
             }
         } catch (org.json.JSONException ignored) {
-            // Corrupt storage must never crash the home screen; start clean.
+            // Corrupt storage must never crash the home screen; start clean —
+            // but keep one copy of the corrupt payload so the data is not
+            // silently destroyed when the next save overwrites the key.
+            SharedPreferences prefs = getPrefs(context);
+            if (prefs.getString(KEY_CUSTOM_COMMANDS_BACKUP, null) == null) {
+                prefs.edit().putString(KEY_CUSTOM_COMMANDS_BACKUP, raw).commit();
+            }
         }
         return result;
     }
@@ -295,6 +318,51 @@ public final class BabyPreferences {
     /** Records that ~/.hushlogin creation succeeded (call only on success). */
     public static void setHushLoginInitialized(@NonNull Context context, boolean initialized) {
         getPrefs(context).edit().putBoolean(KEY_HUSHLOGIN_INITIALIZED, initialized).commit();
+    }
+
+    /** Whether dangerous commands ask for confirmation before running. Defaults to on. */
+    public static boolean isDangerConfirmEnabled(@NonNull Context context) {
+        return getPrefs(context).getBoolean(KEY_DANGER_CONFIRM_ENABLED, true);
+    }
+
+    public static void setDangerConfirmEnabled(@NonNull Context context, boolean enabled) {
+        getPrefs(context).edit().putBoolean(KEY_DANGER_CONFIRM_ENABLED, enabled).commit();
+    }
+
+    /**
+     * The user's dangerous-command patterns (one per line in storage), or the
+     * built-in defaults from {@link BabyActionCatalog} while unset. Editable
+     * from Settings; matching rules live in BabyActionCatalog.assessDanger.
+     */
+    @NonNull
+    public static java.util.List<String> getDangerPatterns(@NonNull Context context) {
+        String raw = getPrefs(context).getString(KEY_DANGER_PATTERNS, null);
+        if (raw == null) return BabyActionCatalog.defaultDangerPatterns();
+        java.util.List<String> patterns = new java.util.ArrayList<>();
+        for (String line : raw.split("\n")) {
+            String pattern = line.trim();
+            if (!pattern.isEmpty() && !patterns.contains(pattern)) patterns.add(pattern);
+        }
+        return patterns;
+    }
+
+    public static void setDangerPatterns(
+        @NonNull Context context,
+        @NonNull java.util.List<String> patterns
+    ) {
+        getPrefs(context).edit()
+            .putString(KEY_DANGER_PATTERNS, android.text.TextUtils.join("\n", patterns))
+            .commit();
+    }
+
+    /** True when the user has saved their own pattern list (defaults otherwise). */
+    public static boolean hasCustomDangerPatterns(@NonNull Context context) {
+        return getPrefs(context).getString(KEY_DANGER_PATTERNS, null) != null;
+    }
+
+    /** Drops the user's pattern list, returning to the built-in defaults. */
+    public static void resetDangerPatterns(@NonNull Context context) {
+        getPrefs(context).edit().remove(KEY_DANGER_PATTERNS).commit();
     }
 
     /**

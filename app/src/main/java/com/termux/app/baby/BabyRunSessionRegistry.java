@@ -105,9 +105,12 @@ public final class BabyRunSessionRegistry {
     }
 
     /**
-     * Bounds registry growth: seen finished sessions go first, then the
-     * oldest finished ones beyond {@link #MAX_FINISHED_RETAINED} (each can
-     * hold ~192 KB of output). Caller must hold the sessions lock.
+     * Bounds registry growth without breaking the class contract: a
+     * finished session the user has not seen yet is NEVER pruned — it is
+     * the bar's only record of that result. Seen finished sessions are
+     * dropped, and the cap loop below only ever touches seen ones as
+     * well (each can hold ~192 KB of output). Caller must hold the
+     * sessions lock.
      */
     private boolean pruneLocked() {
         boolean changed = false;
@@ -119,16 +122,16 @@ public final class BabyRunSessionRegistry {
                 changed = true;
             }
         }
-        int finishedCount = 0;
+        int seenFinishedCount = 0;
         for (BabyRunSession session : sessions) {
-            if (!session.isRunning()) finishedCount++;
+            if (!session.isRunning() && session.isFinishedSeen()) seenFinishedCount++;
         }
-        for (int i = 0; i < sessions.size() && finishedCount > MAX_FINISHED_RETAINED; i++) {
+        for (int i = 0; i < sessions.size() && seenFinishedCount > MAX_FINISHED_RETAINED; i++) {
             BabyRunSession session = sessions.get(i);
-            if (!session.isRunning()) {
+            if (!session.isRunning() && session.isFinishedSeen()) {
                 sessions.remove(i);
                 session.removeListener(sessionForwarder);
-                finishedCount--;
+                seenFinishedCount--;
                 changed = true;
                 i--;
             }

@@ -21,8 +21,13 @@ import java.util.regex.Pattern;
  */
 public final class BabyErrorTranslator {
 
+    // Matches only the shells' actual formats, anchored at end of line:
+    // "foo: not found", "sh: foo: not found", "bash: foo: command not
+    // found". The end anchor keeps unrelated output that merely contains
+    // ": not found" mid-sentence (e.g. "config: not found, using
+    // defaults") from being misread as a missing command.
     private static final Pattern NOT_FOUND_CMD_PATTERN = Pattern.compile(
-        "(?:^|:\\s*)([a-zA-Z0-9._-]+):\\s*(?:command\\s+)?not\\s+found",
+        "(?:^|:\\s*)([a-zA-Z0-9._-]+):\\s*(?:command\\s+)?not\\s+found\\s*$",
         Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
     );
 
@@ -117,9 +122,12 @@ public final class BabyErrorTranslator {
         );
         String lower = combined.toLowerCase(Locale.US);
 
-        // 1. Command not found
-        if (exitCode == 127 || lower.contains("command not found") || lower.contains(": not found")) {
-            String missingCmd = extractMissingCommand(combined);
+        // 1. Command not found. Deliberately no bare ": not found"
+        // substring test: it misfires on ordinary program output. Only
+        // the exit code, the phrase "command not found", or the anchored
+        // shell format above count as evidence.
+        String missingCmd = extractMissingCommand(combined);
+        if (exitCode == 127 || lower.contains("command not found") || missingCmd != null) {
             String pkg = missingCmd != null ? mapBinaryToPackage(missingCmd) : null;
             return new TranslatedError(ErrorCategory.COMMAND_NOT_FOUND, missingCmd, pkg);
         }

@@ -44,6 +44,10 @@ public class BabyOnboardingActivity extends AppCompatActivity
     private static final String STATE_CURRENT_PAGE = "state_current_page";
     private static final String STATE_SELECTED_GOAL = "state_selected_goal";
     private static final String STATE_HAS_SELECTED_GOAL = "state_has_selected_goal";
+    private static final String STATE_TRY_DONE = "state_try_done";
+    private static final String STATE_TRY_FAILED = "state_try_failed";
+    private static final String STATE_TRY_SUMMARY = "state_try_summary";
+    private static final String STATE_TRY_RAW = "state_try_raw";
 
     private static final long CHOICE_LINGER_BEFORE_ADVANCE_MS = 950L;
     private static final long COMPLETION_PULSE_DELAY_MS = 180L;
@@ -61,6 +65,12 @@ public class BabyOnboardingActivity extends AppCompatActivity
 
     @Nullable
     private com.termux.app.baby.BabyCommandExecutor mTryExecutor;
+
+    /**
+     * Try-run state, held here (not in the adapter) so it survives
+     * adapter/activity recreation; saved/restored with the instance state.
+     */
+    private final BabyOnboardingTryState mTryState = new BabyOnboardingTryState();
 
     private int mCurrentPage = BabyOnboardingPagerAdapter.PAGE_HOOK;
     @NonNull
@@ -110,6 +120,13 @@ public class BabyOnboardingActivity extends AppCompatActivity
             String savedGoal = savedInstanceState.getString(STATE_SELECTED_GOAL, BabyPreferences.GOAL_EXPLORE);
             mSelectedGoal = savedGoal != null ? savedGoal : BabyPreferences.GOAL_EXPLORE;
             mHasUserSelectedGoal = savedInstanceState.getBoolean(STATE_HAS_SELECTED_GOAL, false);
+            // A run that was in flight when the activity died never
+            // completes (its executor was shut down) and was never
+            // counted, so it comes back as retryable, not as "running".
+            mTryState.done = savedInstanceState.getBoolean(STATE_TRY_DONE, false);
+            mTryState.failed = savedInstanceState.getBoolean(STATE_TRY_FAILED, false);
+            mTryState.summary = savedInstanceState.getString(STATE_TRY_SUMMARY, null);
+            mTryState.rawOutput = savedInstanceState.getString(STATE_TRY_RAW, null);
         }
 
         mPager = findViewById(R.id.baby_onboarding_pager);
@@ -118,7 +135,7 @@ public class BabyOnboardingActivity extends AppCompatActivity
         mSkipButton = findViewById(R.id.baby_onboarding_skip_button);
         mNextButton = findViewById(R.id.baby_onboarding_next_button);
 
-        mAdapter = new BabyOnboardingPagerAdapter(this, this);
+        mAdapter = new BabyOnboardingPagerAdapter(this, this, mTryState);
         mAdapter.setSelectedGoal(mSelectedGoal, mHasUserSelectedGoal);
 
         mPager.setAdapter(mAdapter);
@@ -189,6 +206,10 @@ public class BabyOnboardingActivity extends AppCompatActivity
         outState.putInt(STATE_CURRENT_PAGE, mCurrentPage);
         outState.putString(STATE_SELECTED_GOAL, mSelectedGoal);
         outState.putBoolean(STATE_HAS_SELECTED_GOAL, mHasUserSelectedGoal);
+        outState.putBoolean(STATE_TRY_DONE, mTryState.done);
+        outState.putBoolean(STATE_TRY_FAILED, mTryState.failed);
+        outState.putString(STATE_TRY_SUMMARY, mTryState.summary);
+        outState.putString(STATE_TRY_RAW, mTryState.rawOutput);
     }
 
     @Override
@@ -254,12 +275,20 @@ public class BabyOnboardingActivity extends AppCompatActivity
      */
     @Override
     public void onTryRunRequested() {
+        if (mTryState.done) return;
         final BabyAction action = mAdapter.getTryAction();
         final String command = mAdapter.getTryCommand();
         if (mTryExecutor == null) {
             mTryExecutor = new com.termux.app.baby.BabyCommandExecutor();
         }
         final com.termux.app.baby.BabyCommandExecutor executor = mTryExecutor;
+        // Gate on the environment: while the bootstrap is still being
+        // extracted there is no shell to run, and the attempt would only
+        // fail. Say it is still preparing instead and keep the retry.
+        if (!executor.isBootstrapReady()) {
+            mAdapter.showTryNotReady();
+            return;
+        }
         executor.executeAsync(command, action.timeoutSeconds,
             new com.termux.app.baby.BabyCommandExecutor.Callback() {
                 @Override
@@ -292,7 +321,7 @@ public class BabyOnboardingActivity extends AppCompatActivity
                             BabyOnboardingActivity.this,
                             com.termux.app.baby.BabyErrorTranslator.classify(result));
                     }
-                    mAdapter.showTryResult(summary, result.getCombinedOutput());
+                    mAdapter.showTryResult(summary, result.getCombinedOutput(), result.isSuccess());
                 }
             });
     }

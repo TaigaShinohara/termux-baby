@@ -44,6 +44,16 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
     }
 
     private static final int MAX_RECENT_NOTES = 10;
+    /** Viewer cap: a giant note file must not be loaded whole into a dialog. */
+    private static final int MAX_VIEWER_CHARS = 100_000;
+
+    /** File IO runs here, never on the UI thread; shut down on dismiss. */
+    private final java.util.concurrent.ExecutorService ioExecutor =
+        java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final android.os.Handler mainHandler =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    /** Set on dismiss so late IO completions stop touching the UI. */
+    private volatile boolean dismissed;
 
     private final EditText noteInput;
     private final TextView feedbackText;
@@ -71,6 +81,10 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
 
         closeButton.setOnClickListener(v -> dismiss());
         saveButton.setOnClickListener(v -> saveCurrentNote());
+        setOnDismissListener(d -> {
+            dismissed = true;
+            ioExecutor.shutdownNow();
+        });
 
         refreshRecentNotes();
     }
@@ -84,63 +98,93 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
             return;
         }
 
-        File notesDir = resolveNotesDir();
-        if (!notesDir.exists() && !notesDir.mkdirs()) {
-            feedbackText.setVisibility(View.VISIBLE);
-            feedbackText.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_error));
-            feedbackText.setText(R.string.baby_error_permission);
-            return;
-        }
+        final String noteContent = content;
+        ioExecutor.execute(() -> {
+            File notesDir = resolveNotesDir();
+            if (!notesDir.exists() && !notesDir.mkdirs()) {
+                mainHandler.post(() -> showSaveError(R.string.baby_error_permission));
+                return;
+            }
 
-        // Millisecond resolution plus an existence loop: two notes saved in
-        // the same second must never overwrite each other.
-        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date());
-        String filename = "note_" + timestamp + ".txt";
-        File noteFile = new File(notesDir, filename);
-        int suffix = 2;
-        while (noteFile.exists()) {
-            filename = "note_" + timestamp + "_" + suffix + ".txt";
-            noteFile = new File(notesDir, filename);
-            suffix++;
-        }
+            // Millisecond resolution plus an existence loop: two notes saved in
+            // the same second must never overwrite each other.
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date());
+            String filename = "note_" + timestamp + ".txt";
+            File noteFile = new File(notesDir, filename);
+            int suffix = 2;
+            while (noteFile.exists()) {
+                filename = "note_" + timestamp + "_" + suffix + ".txt";
+                noteFile = new File(notesDir, filename);
+                suffix++;
+            }
 
-        try (OutputStreamWriter writer = new OutputStreamWriter(
-            new FileOutputStream(noteFile), StandardCharsets.UTF_8
-        )) {
-            writer.write(content);
-            writer.write('\n');
-        } catch (IOException e) {
-            feedbackText.setVisibility(View.VISIBLE);
-            feedbackText.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_error));
-            feedbackText.setText(R.string.baby_error_generic);
-            return;
-        }
+            try (OutputStreamWriter writer = new OutputStreamWriter(
+                new FileOutputStream(noteFile), StandardCharsets.UTF_8
+            )) {
+                writer.write(noteContent);
+                writer.write('\n');
+            } catch (IOException e) {
+                mainHandler.post(() -> showSaveError(R.string.baby_error_generic));
+                return;
+            }
 
-        noteInput.setText("");
+            final String savedName = filename;
+            mainHandler.post(() -> {
+                if (dismissed) return;
+                noteInput.setText("");
+                feedbackText.setVisibility(View.VISIBLE);
+                feedbackText.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_success));
+                feedbackText.setText(getContext().getString(R.string.baby_note_saved, "~/notes/" + savedName));
+
+                performSuccessHaptic();
+                BabyPreferences.setFirstActionCompleted(getContext(), true);
+                if (onNoteSavedListener != null) {
+                    onNoteSavedListener.onNoteSaved();
+                }
+                refreshRecentNotes();
+            });
+        });
+    }
+
+    private void showSaveError(int messageResId) {
+        if (dismissed) return;
         feedbackText.setVisibility(View.VISIBLE);
-        feedbackText.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_success));
-        feedbackText.setText(getContext().getString(R.string.baby_note_saved, "~/notes/" + filename));
-
-        performSuccessHaptic();
-        BabyPreferences.setFirstActionCompleted(getContext(), true);
-        if (onNoteSavedListener != null) {
-            onNoteSavedListener.onNoteSaved();
-        }
-        refreshRecentNotes();
+        feedbackText.setTextColor(ContextCompat.getColor(getContext(), R.color.baby_error));
+        feedbackText.setText(messageResId);
     }
 
     private void refreshRecentNotes() {
         recentContainer.removeAllViews();
-        File notesDir = resolveNotesDir();
-        File[] files = notesDir.exists() ? notesDir.listFiles((dir, name) -> name.endsWith(".txt")) : null;
+        ioExecutor.execute(() -> {
+            File notesDir = resolveNotesDir();
+            File[] files = notesDir.exists()
+                ? notesDir.listFiles((dir, name) -> name.endsWith(".txt")) : null;
+            if (files == null || files.length == 0) {
+                mainHandler.post(() -> {
+                    if (!dismissed) emptyListText.setVisibility(View.VISIBLE);
+                });
+                return;
+            }
+            Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+            int count = Math.min(files.length, MAX_RECENT_NOTES);
+            java.util.List<File> top = new java.util.ArrayList<>();
+            java.util.List<String> firstLines = new java.util.ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                top.add(files[i]);
+                firstLines.add(readFirstLine(files[i]));
+            }
+            mainHandler.post(() -> {
+                if (!dismissed) buildRecentRows(top, firstLines);
+            });
+        });
+    }
 
-        if (files == null || files.length == 0) {
-            emptyListText.setVisibility(View.VISIBLE);
-            return;
-        }
-
+    private void buildRecentRows(
+        @NonNull java.util.List<File> files,
+        @NonNull java.util.List<String> firstLines
+    ) {
+        recentContainer.removeAllViews();
         emptyListText.setVisibility(View.GONE);
-        Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
 
         Context ctx = getContext();
         float density = ctx.getResources().getDisplayMetrics().density;
@@ -148,10 +192,9 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
         int padV = Math.round(10 * density);
         int marginBottom = Math.round(8 * density);
 
-        int count = Math.min(files.length, MAX_RECENT_NOTES);
-        for (int i = 0; i < count; i++) {
-            final File file = files[i];
-            String firstLine = readFirstLine(file);
+        for (int i = 0; i < files.size(); i++) {
+            final File file = files.get(i);
+            String firstLine = firstLines.get(i);
 
             LinearLayout row = new LinearLayout(ctx);
             row.setOrientation(LinearLayout.VERTICAL);
@@ -187,12 +230,17 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
     }
 
     private void showNoteViewer(@NonNull File file) {
-        String content = readWholeFile(file);
-        new AlertDialog.Builder(getContext())
-            .setTitle(file.getName())
-            .setMessage(content)
-            .setPositiveButton(R.string.baby_note_close, null)
-            .show();
+        ioExecutor.execute(() -> {
+            String content = readWholeFileCapped(file);
+            mainHandler.post(() -> {
+                if (dismissed) return;
+                new AlertDialog.Builder(getContext())
+                    .setTitle(file.getName())
+                    .setMessage(content)
+                    .setPositiveButton(R.string.baby_note_close, null)
+                    .show();
+            });
+        });
     }
 
     /**
@@ -221,18 +269,25 @@ public final class BabyQuickNoteSheet extends BottomSheetDialog {
     }
 
     @NonNull
-    private static String readWholeFile(@NonNull File file) {
+    private static String readWholeFileCapped(@NonNull File file) {
         StringBuilder sb = new StringBuilder();
+        boolean truncated = false;
         try (BufferedReader reader = new BufferedReader(
             new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)
         )) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (sb.length() > 0) sb.append('\n');
+                if (sb.length() + line.length() > MAX_VIEWER_CHARS) {
+                    sb.append(line, 0, Math.max(0, MAX_VIEWER_CHARS - sb.length()));
+                    truncated = true;
+                    break;
+                }
                 sb.append(line);
             }
         } catch (IOException ignored) {
         }
+        if (truncated) sb.append("\n…");
         return sb.toString();
     }
 

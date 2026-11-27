@@ -391,7 +391,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mIsInvalidState) return;
 
-        mIsOnboardingInProgress = false;
+        // mIsOnboardingInProgress is NOT cleared here: onResume fires right
+        // after onCreate launched onboarding, and clearing it would kill the
+        // "do not finish while onboarding is up" guard in onServiceConnected.
+        // It is cleared in onActivityResult when onboarding actually returns.
 
         // Session bar: refresh now and keep it fresh while the activity is up.
         refreshSessionBar();
@@ -463,6 +466,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         super.onDestroy();
 
         Logger.logDebug(LOG_TAG, "onDestroy");
+
+        // Stop the session-bar poller here too (onStop alone is not a
+        // guarantee — a destroy without a preceding stop would leak it).
+        mSessionBarHandler.removeCallbacks(mSessionBarPoll);
 
         if (mBabyModeController != null) {
             mBabyModeController.destroy();
@@ -888,6 +895,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private GestureDetector mModeSwipeDetector;
 
+    /**
+     * True while the current gesture started on a view that owns horizontal
+     * swipes itself (session chip bar, toolbar pager) or on the drawer's
+     * open edge — those gestures must never also switch modes.
+     */
+    private boolean mModeSwipeGestureBlocked;
+
+    /** Left-edge width (px) treated as a drawer-open swipe, not a mode swipe. */
+    private float modeSwipeDrawerEdgePx() {
+        return 32f * getResources().getDisplayMetrics().density;
+    }
+
+    private static boolean isPointInView(@Nullable View view, float x, float y) {
+        if (view == null || view.getVisibility() != View.VISIBLE) return false;
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        return x >= location[0] && x < location[0] + view.getWidth()
+            && y >= location[1] && y < location[1] + view.getHeight();
+    }
+
+    private boolean isModeSwipeBlockedStart(float x, float y) {
+        if (x <= modeSwipeDrawerEdgePx()) return true;
+        if (isPointInView(mSessionBar, x, y)) return true;
+        return isPointInView(getTerminalToolbarViewPager(), x, y);
+    }
+
     private void setUpModeSwipe() {
         final float density = getResources().getDisplayMetrics().density;
         final float minDistancePx = 96f * density;
@@ -930,8 +963,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (mModeSwipeDetector != null) {
+        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            // Decide from where the gesture STARTS: a fling that began on
+            // the chip bar / toolbar pager / drawer edge belongs to those
+            // views, even if it ends over the terminal.
+            mModeSwipeGestureBlocked = isModeSwipeBlockedStart(ev.getX(), ev.getY());
+        }
+        if (mModeSwipeDetector != null && !mModeSwipeGestureBlocked) {
             mModeSwipeDetector.onTouchEvent(ev);
+        }
+        if (ev.getActionMasked() == MotionEvent.ACTION_UP
+            || ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            mModeSwipeGestureBlocked = false;
         }
         return super.dispatchTouchEvent(ev);
     }
@@ -992,10 +1035,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         StringBuilder signature = new StringBuilder();
         for (BabyRunSession s : runSessions) {
-            signature.append('r').append(s.id).append(':').append(s.getState()).append(';');
+            signature.append('r').append(s.id).append(':').append(s.getState())
+                .append(':').append(s.title).append(';');
         }
         for (TerminalSession t : terminalSessions) {
             signature.append('t').append(System.identityHashCode(t));
+            // Include the name: renaming a session must rebuild its chip.
+            signature.append(':').append(t.mSessionName);
             if (t == currentSession) signature.append('*');
             signature.append(';');
         }

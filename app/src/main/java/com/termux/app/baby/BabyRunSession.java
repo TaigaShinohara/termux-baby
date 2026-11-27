@@ -6,6 +6,7 @@ import androidx.annotation.Nullable;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * One background-capable Baby Mode run (a card action, a tool install, an agent
@@ -77,6 +78,8 @@ public final class BabyRunSession {
     private volatile BabyCommandExecutor.ExecutionHandle handle;
     private volatile boolean finishedSeen;
     private volatile boolean completionHandled;
+    /** Re-entry guard: a session executes at most once. */
+    private final AtomicBoolean started = new AtomicBoolean(false);
 
     BabyRunSession(
         long id,
@@ -152,6 +155,9 @@ public final class BabyRunSession {
     }
 
     public void start(@NonNull BabyCommandExecutor executor) {
+        // A second start() (double tap, rebind race) must not run the
+        // command twice or overwrite the live handle.
+        if (!started.compareAndSet(false, true)) return;
         handle = executor.executeAsync(command, timeoutSeconds, new BabyCommandExecutor.Callback() {
             @Override
             public void onOutputLine(@NonNull String line) {

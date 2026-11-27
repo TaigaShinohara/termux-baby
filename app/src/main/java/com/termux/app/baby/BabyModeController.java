@@ -109,6 +109,13 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
     private boolean hasAnimatedEntrance = false;
     private boolean environmentReady;
 
+    /** Registry listener, kept in a field so destroy() can unregister it. */
+    private final BabyRunSessionRegistry.Listener registryListener;
+    /** Snapshot of "id=state" pairs last forwarded to the host's session bar. */
+    private String lastForwardedSessionStates = "";
+    /** AlertDialogs currently shown by this controller, for teardown. */
+    private final java.util.List<AlertDialog> activeDialogs = new java.util.ArrayList<>();
+
     public BabyModeController(
         @NonNull AppCompatActivity activity,
         @NonNull View babyHomeRoot,
@@ -130,10 +137,21 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
 
         this.environmentReady = executor.isBootstrapReady();
 
-        runSessionRegistry.addListener(() -> {
+        registryListener = () -> {
             handleRunSessionCompletions();
-            hostCallbacks.onRunSessionsChanged();
-        });
+            // The registry also fires for every output line; the session
+            // bar only cares about the session set and their states, so
+            // forward only when one of those actually changed.
+            StringBuilder snapshot = new StringBuilder();
+            for (BabyRunSession session : runSessionRegistry.getSessions()) {
+                snapshot.append(session.id).append('=').append(session.getState()).append(';');
+            }
+            if (!snapshot.toString().equals(lastForwardedSessionStates)) {
+                lastForwardedSessionStates = snapshot.toString();
+                hostCallbacks.onRunSessionsChanged();
+            }
+        };
+        runSessionRegistry.addListener(registryListener);
 
         findActionButton.setOnClickListener(v -> openCommandHelper());
         MaterialButton addCustomButton = babyHomeRoot.findViewById(R.id.baby_add_custom_button);
@@ -257,7 +275,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         BabyAction.OutputFormat.INSTALL,
                         BabyCommandExecutor.INSTALL_TIMEOUT_SECONDS,
                         toolName,
-                        "install:" + tool.packageName
+                        "install:" + tool.packageName,
+                        true
                     );
                 }
 
@@ -272,7 +291,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         tool.tryOutputFormat,
                         BabyCommandExecutor.DEFAULT_TIMEOUT_SECONDS,
                         toolName,
-                        "try:" + tool.packageName
+                        "try:" + tool.packageName,
+                        true
                     );
                 }
 
@@ -286,7 +306,8 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         BabyAction.OutputFormat.INSTALL,
                         BabyCommandExecutor.AGENT_INSTALL_TIMEOUT_SECONDS,
                         agentName,
-                        "agent:" + agent.id
+                        "agent:" + agent.id,
+                        true
                     );
                 }
 
@@ -347,18 +368,20 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
 
     /** Runs a user-registered custom shortcut command. */
     public void runCustomCommand(@NonNull BabyCustomCommand custom) {
-        if (!BabyActionCatalog.isSafeForAutoRun(custom.command)) return;
         // A custom command is arbitrary text the user pasted or typed:
         // the very first run asks once, showing the command itself, so
-        // nothing unreviewed ever auto-runs from a card tap.
+        // nothing unreviewed ever auto-runs from a card tap. A dangerous
+        // command skips this dialog — the danger confirmation in
+        // runCommandInSheet shows the command and asks every time instead.
         boolean neverRan = BabyPreferences.getRunCount(activity, custom.id) == 0
-            && BabyPreferences.getLastResultSummary(activity, custom.id) == null;
+            && BabyPreferences.getLastResultSummary(activity, custom.id) == null
+            && dangerMatch(custom.command) == null;
         if (neverRan) {
-            new AlertDialog.Builder(activity)
+            AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setTitle(custom.label)
                 .setMessage(activity.getString(R.string.baby_custom_first_run, custom.command))
                 .setNegativeButton(R.string.baby_helper_input_cancel, null)
-                .setPositiveButton(R.string.baby_helper_run, (dialog, which) ->
+                .setPositiveButton(R.string.baby_helper_run, (d, which) ->
                     runCommandInSheet(
                         custom.label,
                         R.drawable.ic_baby_terminal,
@@ -368,7 +391,9 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                         custom.label,
                         custom.id
                     ))
-                .show();
+                .create();
+            trackDialog(dialog);
+            dialog.show();
             return;
         }
         runCommandInSheet(
@@ -386,8 +411,23 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
      * Releases sheets and background executor cleanly. Call from {@code TermuxActivity.onDestroy()}.
      */
     public void destroy() {
+        runSessionRegistry.removeListener(registryListener);
+        dismissActiveDialogs();
         dismissActiveSheet();
         executor.shutdown();
+    }
+
+    /** Registers a dialog for teardown in destroy(); unregisters on dismiss. */
+    private void trackDialog(@NonNull AlertDialog dialog) {
+        activeDialogs.add(dialog);
+        dialog.setOnDismissListener(d -> activeDialogs.remove(dialog));
+    }
+
+    private void dismissActiveDialogs() {
+        for (AlertDialog dialog : new java.util.ArrayList<>(activeDialogs)) {
+            if (dialog.isShowing()) dialog.dismiss();
+        }
+        activeDialogs.clear();
     }
 
     private void handleTryPython(@NonNull BabyAction action) {
@@ -497,10 +537,52 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                 );
             }));
 
+        trackDialog(dialog);
         dialog.show();
     }
 
     private void runCommandInSheet(
+        @NonNull String title,
+        int iconResId,
+        @NonNull String command,
+        @NonNull BabyAction.OutputFormat outputFormat,
+        int timeoutSeconds,
+        @Nullable String displayName,
+        @Nullable String sourceId
+    ) {
+        runCommandInSheet(title, iconResId, command, outputFormat, timeoutSeconds,
+            displayName, sourceId, false);
+    }
+
+    /**
+     * @param skipDangerGate for installer-sheet runs: those commands are
+     * fixed catalog entries that already passed the installer's own
+     * confirmation dialog, so the danger gate must not ask a second time.
+     */
+    private void runCommandInSheet(
+        @NonNull String title,
+        int iconResId,
+        @NonNull String command,
+        @NonNull BabyAction.OutputFormat outputFormat,
+        int timeoutSeconds,
+        @Nullable String displayName,
+        @Nullable String sourceId,
+        boolean skipDangerGate
+    ) {
+        if (!skipDangerGate) {
+            String danger = dangerMatch(command);
+            if (danger != null) {
+                showDangerConfirmDialog(danger, command, () ->
+                    openRunnerSheet(title, iconResId, command, outputFormat,
+                        timeoutSeconds, displayName, sourceId));
+                return;
+            }
+        }
+        openRunnerSheet(title, iconResId, command, outputFormat, timeoutSeconds,
+            displayName, sourceId);
+    }
+
+    private void openRunnerSheet(
         @NonNull String title,
         int iconResId,
         @NonNull String command,
@@ -516,9 +598,41 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
             displayName, sourceId);
     }
 
+    /**
+     * Returns the matched danger pattern when the command is dangerous AND
+     * the confirmation setting is on; null otherwise (safe, or the user
+     * turned confirmations off in Settings).
+     */
+    @Nullable
+    private String dangerMatch(@NonNull String command) {
+        if (!BabyPreferences.isDangerConfirmEnabled(activity)) return null;
+        return BabyActionCatalog.assessDanger(
+            command, BabyPreferences.getDangerPatterns(activity));
+    }
+
+    /** Asks "this command is dangerous — run it anyway?" before a run. */
+    private void showDangerConfirmDialog(
+        @NonNull String matchedPattern,
+        @NonNull String command,
+        @NonNull Runnable onConfirmed
+    ) {
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+            .setTitle(R.string.baby_danger_title)
+            .setMessage(activity.getString(
+                R.string.baby_danger_message, command, matchedPattern))
+            .setNegativeButton(R.string.baby_helper_input_cancel, null)
+            .setPositiveButton(R.string.baby_danger_run, (d, which) -> onConfirmed.run())
+            .create();
+        trackDialog(dialog);
+        dialog.show();
+    }
+
     @NonNull
     private BabyCommandRunnerSheet createRunnerSheet() {
-        return new BabyCommandRunnerSheet(activity, this, proTerminalBridge);
+        BabyCommandRunnerSheet sheet = new BabyCommandRunnerSheet(activity, this, proTerminalBridge);
+        sheet.setDangerGate((command, matchedPattern, onConfirmed) ->
+            showDangerConfirmDialog(matchedPattern, command, onConfirmed));
+        return sheet;
     }
 
     /**
@@ -874,6 +988,20 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
      * card. Used by the re-run button and by taps on mastered cards.
      */
     private void runGridItemDirect(@NonNull GridItem item) {
+        // The shortcut path skips the runner sheet, so the danger gate
+        // lives here: a dangerous command asks first, even on this path.
+        String command = item.action != null ? item.action.commandTemplate
+            : item.custom != null ? item.custom.command : null;
+        if (command == null) return;
+        String danger = dangerMatch(command);
+        if (danger != null) {
+            showDangerConfirmDialog(danger, command, () -> runGridItemDirectUngated(item));
+            return;
+        }
+        runGridItemDirectUngated(item);
+    }
+
+    private void runGridItemDirectUngated(@NonNull GridItem item) {
         if (item.action != null) {
             BabyAction action = item.action;
             if (action.commandTemplate == null) return;
@@ -887,7 +1015,6 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                 action.id
             );
         } else if (item.custom != null) {
-            if (!BabyActionCatalog.isSafeForAutoRun(item.custom.command)) return;
             startRunSession(
                 item.custom.label,
                 R.drawable.ic_baby_terminal,
@@ -974,12 +1101,14 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                     message.append(note.token).append(" — ")
                         .append(activity.getString(note.meaningResId));
                 }
-                new AlertDialog.Builder(activity)
+                AlertDialog explainDialog = new AlertDialog.Builder(activity)
                     .setTitle(item.action != null
                         ? activity.getString(item.action.titleResId) : item.custom.label)
                     .setMessage(message.toString())
                     .setPositiveButton(R.string.baby_runner_close, null)
-                    .show();
+                    .create();
+                trackDialog(explainDialog);
+                explainDialog.show();
             });
         }
         if (index > 0) {
@@ -1015,11 +1144,13 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
 
         String title = item.action != null
             ? activity.getString(item.action.titleResId) : item.custom.label;
-        new AlertDialog.Builder(activity)
+        AlertDialog menuDialog = new AlertDialog.Builder(activity)
             .setTitle(title)
             .setItems(labels.toArray(new CharSequence[0]),
                 (dialog, which) -> actions.get(which).run())
-            .show();
+            .create();
+        trackDialog(menuDialog);
+        menuDialog.show();
     }
 
     private void movePinned(@NonNull String id, int delta) {
@@ -1078,10 +1209,9 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                     commandInput.setError(ctx.getString(R.string.baby_custom_empty));
                     return;
                 }
-                if (!BabyActionCatalog.isSafeForAutoRun(command)) {
-                    commandInput.setError(ctx.getString(R.string.baby_custom_unsafe));
-                    return;
-                }
+                // Dangerous commands may be registered: they are not
+                // blocked here, they ask for confirmation at run time
+                // (the danger gate), which is the moment that matters.
                 String id = "custom_" + System.currentTimeMillis();
                 List<BabyCustomCommand> customs = BabyPreferences.getCustomCommands(activity);
                 customs.add(new BabyCustomCommand(id, label, command));
@@ -1093,6 +1223,7 @@ public final class BabyModeController implements BabyCommandRunnerSheet.RunSessi
                 buildGrid();
             }));
 
+        trackDialog(dialog);
         dialog.show();
     }
 

@@ -206,6 +206,15 @@
     <string name="baby_pref_category_title">Termux Baby</string>
     <string name="baby_pref_replay_onboarding_title">かんたんガイドをもう一度見る</string>
     <string name="baby_pref_replay_onboarding_summary">初回の3ステップ案内をもう一度表示します</string>
+    <string name="baby_danger_title">危険なコマンドです</string>
+    <string name="baby_danger_message">「%1$s」は危険な言葉（%2$s）を含んでいます。間違えるとファイルが消えたり、元に戻せなくなったりします。本当に実行しますか？</string>
+    <string name="baby_danger_run">それでも実行</string>
+    <string name="baby_pref_danger_confirm_title">危険なコマンドを実行前に確認する</string>
+    <string name="baby_pref_danger_confirm_summary">オンにすると、危険な言葉を含むコマンドは実行前に必ず確認します</string>
+    <string name="baby_pref_danger_patterns_title">危険な言葉リスト</string>
+    <string name="baby_pref_danger_patterns_summary">1行に1つ書きます。ここにある言葉を含むコマンドが「危険」と判定されます</string>
+    <string name="baby_pref_danger_patterns_save">保存</string>
+    <string name="baby_pref_danger_patterns_reset">最初の状態に戻す</string>
     <string name="baby_pref_default_mode_title">起動時にかんたんモードを開く</string>
     <string name="baby_pref_default_mode_summary_baby">ワンタップカード画面で開く（初心者におすすめ）</string>
     <string name="baby_pref_default_mode_summary_pro">通常のターミナル画面で直接開く</string>
